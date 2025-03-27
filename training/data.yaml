@@ -1,0 +1,16 @@
+path: dataset
+train: images/train
+val: images/val
+
+names:
+  0: Ball
+  1: Bicycle
+  2: Bike
+  3: Car
+  4: Cart
+  5: Curb
+  6: Human
+  7: Pole
+  8: Ramp
+  9: Tree
+  10: White line
