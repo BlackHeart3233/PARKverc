@@ -23,7 +23,8 @@ def extract_frames(video_path, output_dir, frames_per_second=3):
         if not video.isOpened():
             raise IOError("Ne morem odpret videja")
 
-        # get fps
+        # get fps če bomo rabili kasneje da dobimo vse slike v video za učenje,
+        # zaenkra omejeno na 3 slike na sekundo
         fps = video.get(cv2.CAP_PROP_FPS)
 
         # frame intervals in milliseconds
