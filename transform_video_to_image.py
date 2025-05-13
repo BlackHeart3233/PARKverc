@@ -11,7 +11,7 @@ params:
 """
 
 
-def extract_frames(video_path, output_dir, frames_per_second=3):
+def extract_frames(video_path, output_dir, frames_per_second=1):
     try:
 
         # create output dir
@@ -58,7 +58,7 @@ def extract_frames(video_path, output_dir, frames_per_second=3):
         print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
-    video_path = "assets/video1.mov"  # trenutno imam v assets
-    output_dir = "results/video1/"  # hranim v results
+    video_path = "assets/lovr/IMG_4907.MOV"  # trenutno imam v assets
+    output_dir = "results/IMG_4907/"  # hranim v results
 
-    extract_frames(video_path, output_dir, frames_per_second=3)
+    extract_frames(video_path, output_dir, frames_per_second=1)
