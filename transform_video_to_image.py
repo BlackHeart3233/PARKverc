@@ -2,63 +2,65 @@ import cv2
 import os
 
 """
-video to images converer at a specific frame rate
+Pretvori video v slike pri določeni hitrosti frame-ov.
 
-params:
+Parametri:
     video_path (str)
     output_dir (str)
-    frames_per_second (int, optional) defaults to 3.
+    frames_per_second (int, optional) – privzeto 3
 """
 
-
-def extract_frames(video_path, output_dir, frames_per_second=1):
+def extract_frames(video_path, output_dir, frames_per_second=0):
     try:
-
-        # create output dir
+        # Ustvari izhodno mapo
         os.makedirs(output_dir, exist_ok=True)
 
-        # poen vide
+        # Odpri video
         video = cv2.VideoCapture(video_path)
 
         if not video.isOpened():
             raise IOError("Ne morem odpret videja")
 
-        # get fps če bomo rabili kasneje da dobimo vse slike v video za učenje,
-        # zaenkra omejeno na 3 slike na sekundo
-        fps = video.get(cv2.CAP_PROP_FPS)
+        # FPS iz videa, če uporabnik ne poda svoje vrednosti
+        if frames_per_second == 0:
+            frames_per_second = video.get(cv2.CAP_PROP_FPS)
 
-        # frame intervals in milliseconds
         frame_interval_ms = 1000 / frames_per_second
-
         current_time_ms = 0
         saved_frame_count = 0
 
         while True:
             ret, frame = video.read()
-
-            # end of video
             if not ret:
                 break
 
-            # current frame timestamp in ms
             current_frame_time_ms = video.get(cv2.CAP_PROP_POS_MSEC)
 
             if current_frame_time_ms >= current_time_ms:
-                # save JPEG
                 saved_frame_count += 1
                 output_path = os.path.join(output_dir, f"frame_{saved_frame_count}.jpg")
                 cv2.imwrite(output_path, frame)
                 current_time_ms += frame_interval_ms
 
-        video.release()
+        #Poizkusi še shraniti zadnji frame, če ga ni v zanki
+        total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+        if saved_frame_count < total_frames:
+            video.set(cv2.CAP_PROP_POS_FRAMES, total_frames - 1)
+            ret, frame = video.read()
+            if ret:
+                saved_frame_count += 1
+                output_path = os.path.join(output_dir, f"frame_{saved_frame_count}.jpg")
+                cv2.imwrite(output_path, frame)
+                print(f"Dodan še zadnji frame: frame_{saved_frame_count}.jpg")
 
+        video.release()
         print(f"Shranjenih {saved_frame_count} frameov v {output_dir}")
 
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"Napaka: {e}")
 
 if __name__ == "__main__":
-    video_path = "assets/lovr/IMG_4907.MOV"  # trenutno imam v assets
-    output_dir = "results/IMG_4907/"  # hranim v results
+    video_path = "assets/Kjara/video/Video_007_25_4_2025.mp4"
+    output_dir = "assets/Kjara/images_from_video/Video_007_25_4_2025"
 
-    extract_frames(video_path, output_dir, frames_per_second=1)
+    extract_frames(video_path, output_dir, 25)
