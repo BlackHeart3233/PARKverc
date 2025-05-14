@@ -1,64 +1,54 @@
 import cv2
-import threading
+import argparse
 from ultralytics import YOLO
-import time
 
-model = YOLO("runs/detect/train3/weights/last.pt")  #  speed
-#model = YOLO("runs/detect/train3/weights/best.pt")  # accuracy
 
-# frame size
-FRAME_WIDTH = 640
-FRAME_HEIGHT = 480
+"""
+Argumenti:
 
-class WebcamStream:
-    def __init__(self, src=0):
-        self.cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-        self.grabbed, self.frame = self.cap.read()
-        self.stopped = False
+--source webcam
+--source path_do_video_datoteke
+"""
 
-    def start(self):
-        threading.Thread(target=self.update, daemon=True).start()
-        return self
+parser = argparse.ArgumentParser(description="YOLOv8 Live / Video Detection")
+parser.add_argument('--source',
+                    type=str,
+                    default='webcam',
+                    help="Input source: 'webcam' or path to video file")
 
-    def update(self):
-        while not self.stopped:
-            self.grabbed, self.frame = self.cap.read()
+args = parser.parse_args()
 
-    def read(self):
-        return self.frame
 
-    def stop(self):
-        self.stopped = True
-        self.cap.release()
+model = YOLO("runs/detect/train/weights/best.pt")
 
-# init stream
-stream = WebcamStream().start()
-time.sleep(1.0)  # camera should warm up
 
-print("Live Detection started ctrl + c to stop")
+if args.source == 'webcam':
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    print("webcam input.")
+else:
+    cap = cv2.VideoCapture(args.source)
+    if not cap.isOpened():
+        print(f"Could not open video file: {args.source}")
+        exit()
+    print(f"Using video file: {args.source}")
+
+print("ctrl + c  to quit.")
+
 
 while True:
-    frame = stream.read()
-    if frame is None:
-        continue
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-    # opcijsko: resize for speed (model itak auto-resize-a)
-    frame_resized = cv2.resize(frame, (640, 480))
+    results = model(frame, verbose=False)
+    annotated_frame = results[0].plot()
 
-    # disable tracking for more speed
-    results = model(frame_resized, verbose=False)
+    cv2.imshow("YOLOv8 Detection", annotated_frame)
 
-    # nraiši rezultat
-    annotated = results[0].plot()
-
-    # pokaž v okno
-    cv2.imshow("YOLOv8 livestream", annotated)
-
-    # izhod
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-stream.stop()
+cap.release()
 cv2.destroyAllWindows()
