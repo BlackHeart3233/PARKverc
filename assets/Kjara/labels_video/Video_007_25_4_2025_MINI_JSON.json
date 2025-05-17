@@ -1,11 +1,11 @@
 [
   {
     "video": "\/data\/upload\/1\/450a6346-Video_007_25_4_2025.mp4",
-    "id": 1,
+    "id": 1, 
     "box": [
       {
-        "framesCount": 366,
-        "duration": 14.642666,
+        "framesCount": 366, 
+        "duration": 14.642666, 
         "sequence": [
           {
             "frame": 1,

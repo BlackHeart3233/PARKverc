@@ -9,12 +9,10 @@ labels_dir = Path("assets/Kjara/labels_image/Video_007_25_4_2025_MINI_JSON")
 output_base = Path("assets/Kjara/yolo_data")
 train_split = 0.8
 
-# Output structure
 for split in ["train", "val"]:
     os.makedirs(output_base / "images" / split, exist_ok=True)
     os.makedirs(output_base / "labels" / split, exist_ok=True)
 
-# Match image-label pairs
 image_files = sorted(images_dir.glob("*.jpg"))
 random.shuffle(image_files)
 
@@ -26,15 +24,13 @@ def copy_files(file_list, split):
     for img_path in file_list:
         label_path = labels_dir / (img_path.stem + ".txt")
         if not label_path.exists():
-            continue  # skip unmatched files
-
+            continue  
         shutil.copy2(img_path, output_base / "images" / split / img_path.name)
         shutil.copy2(label_path, output_base / "labels" / split / label_path.name)
 
 copy_files(train_files, "train")
 copy_files(val_files, "val")
 
-# Write data.yaml
 yaml_path = output_base / "data.yaml"
 with open(yaml_path, "w") as f:
     f.write(f"""path: {output_base}
