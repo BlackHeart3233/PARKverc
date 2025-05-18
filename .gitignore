@@ -5,3 +5,17 @@ __pycache__/
 /results
 .idea
 /augmentacija
+.env
+
+
+/model_1/raw/
+/model_1/augmented/
+/model_1/datasets/
+/model_1/runs/
+/model_1/weights/
+/model_1/test/
+yolov8s-obb.pt
+yolov8n-obb.pt
+yolov8m-obb.pt
+yolov8m.pt
+yolo11n.pt
