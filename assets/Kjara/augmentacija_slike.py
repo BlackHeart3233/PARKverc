@@ -83,7 +83,7 @@ def main(jpg_files, savePath):
         agumenPic = transform(str(chosenFile), savePath)
         save_path = os.path.join(savePath, chosenFile.name)
         plt.imsave(save_path, agumenPic['image'])
-    print("Augmentacija je končana 😄")
+    print("Augmentacija je končana 😄😄")
 
 
 if __name__=="__main__":
