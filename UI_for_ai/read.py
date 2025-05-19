@@ -5,12 +5,18 @@ from PIL import Image, ImageDraw, ImageFont
 import threading
 import winsound
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from model_1.model_odlocanja.model import obdelaj_sliko
+
+
 #Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
-video1_path = r'C:\\Users\\nejla\\Desktop\\UI_for_ai\\Video_009_25_4_2025 (1).mp4'
-video2_path = r'C:\\Users\\nejla\\Desktop\\UI_for_ai\\Video_006_28_3_2025.mp4'
-background_path = r'C:\\Users\\nejla\\Desktop\\UI_for_ai\\background.jpg'
-arial_path = r'C:\\Windows\\Fonts\\arial.ttf'
-ding_sound_path = r'C:\\Users\\nejla\\Desktop\\UI_for_ai\\ding.wav'
+video1_path = 'Video_009_25_4_2025 (1).mp4'
+video2_path = 'Video_006_28_3_2025.mp4'
+background_path = r'background.jpg'
+arial_path = 'ARIAL.TTF'
+ding_sound_path = 'ding.mp3'
 
 #some aesthetic zadevice tule
 PADDING_LEFT = 20
@@ -119,7 +125,10 @@ def play_video(video_path, messages, draw_curves=False):
         if not ret:
             break
 
-        resized_frame = cv2.resize(frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
+        annotated_frame, results = obdelaj_sliko(frame, 0.5)
+
+        resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
+
         padded_frame = background_resized.copy()
         padded_frame[ #aestheticsss
             PADDING_TOP_BOTTOM:PADDING_TOP_BOTTOM + video_height,

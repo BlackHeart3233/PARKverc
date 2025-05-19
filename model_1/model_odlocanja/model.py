@@ -5,15 +5,15 @@ def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_s_crtami/reso
     model = YOLO(url)
     return model
 
-def obdelaj_sliko(frame):
-    model = nalozi_model()
+model = nalozi_model()
 
+def obdelaj_sliko(frame, sigurnost = 0.4):
     """
     obdelaj posamezen okvir (sliko) in vrni:
     - označen okvir (annotated image)
     - rezultate detekcije
     """
-    results = model(frame, verbose=False)
+    results = model(frame, verbose=False, conf=sigurnost)
 
     annotated = results[0].plot()
 
