@@ -125,7 +125,7 @@ def play_video(video_path, messages, draw_curves=False):
         if not ret:
             break
 
-        annotated_frame, results = obdelaj_sliko(frame, 0.5)
+        annotated_frame, results = obdelaj_sliko(frame, 0.64)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 

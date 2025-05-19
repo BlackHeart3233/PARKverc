@@ -7,7 +7,7 @@ def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_s_crtami/reso
 
 model = nalozi_model()
 
-def obdelaj_sliko(frame, sigurnost = 0.4):
+def obdelaj_sliko(frame, sigurnost = 0.6):
     """
     obdelaj posamezen okvir (sliko) in vrni:
     - označen okvir (annotated image)
