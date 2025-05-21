@@ -4,9 +4,9 @@ import random
 from pathlib import Path
 
 # Paths
-images_dir = Path("assets/Kjara/images_from_video/Video_007_25_4_2025")
-labels_dir = Path("assets/Kjara/labels_image/Video_007_25_4_2025_MINI_JSON")
-output_base = Path("assets/Kjara/yolo_data")
+images_dir = Path("assets/Kjara/images_from_video/Video_007_25_4_2025/")
+labels_dir = Path("assets/Kjara/labels_image/Video_007_25_4_2025/")
+output_base = Path("Stranski_model/yolo_data")
 train_split = 0.8
 
 for split in ["train", "val"]:
@@ -53,4 +53,3 @@ names:
 """)
 
 print("✅ Dataset prepared for training in:", output_base)
-print("👉 To train, run:\n\n  yolo detect train model=yolov8n.pt data=assets/Kjara/yolo_data/data.yaml epochs=50 imgsz=640")

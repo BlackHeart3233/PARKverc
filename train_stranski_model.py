@@ -1,10 +1,11 @@
 from ultralytics import YOLO
 
-model = YOLO("yolov8n.pt")  
+model = YOLO("yolov8n.pt")
 model.train(
-    data="assets/Kjara/yolo_data/data.yaml",
+    data="Stranski_model/yolo_data/data.yaml",
     epochs=50,
-    imgsz=640
+    imgsz=640,
+    device=0  # 0 = prva GPU naprava
 )
 
 #shrani v runs/detect/train/weights/best.pt
