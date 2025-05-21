@@ -1,0 +1,27 @@
+name: CI  # Ime delovnega toka
+
+on:
+  push:
+    branches:
+      - devel  # Sproži se ob "push" na razvojno vejo
+
+jobs:
+  test:
+    runs-on: windows-latest  # Uporabimo najnovejšo Windows okolje
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2  # Pridobi kodo iz repozitorija
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'  # Nastavi različico Pythona
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt  # Namestitev potrebnih knjižnic
+
+      - name: Run unit tests
+        run: python -m unittest discover  # Zažene enotne teste
