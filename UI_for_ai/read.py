@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model_1.model_odlocanja.model import obdelaj_sliko
-
+from Stranski_model.yolo_data.stranski_mode import obdelaj_sliko_model_2
 
 #Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
 video1_path = 'Video_009_25_4_2025 (1).mp4'
@@ -125,7 +125,7 @@ def play_video(video_path, messages, draw_curves=False):
         if not ret:
             break
 
-        annotated_frame, results = obdelaj_sliko(frame, 0.64)
+        annotated_frame, results = obdelaj_sliko_model_2(frame, 0.64)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 
