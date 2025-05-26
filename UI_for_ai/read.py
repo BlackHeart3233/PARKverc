@@ -4,6 +4,9 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 import threading
 import winsound
+import torch
+from torchvision import transforms
+from torchvision.models import resnet18
 
 import sys
 import os
@@ -11,9 +14,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model_1.model_odlocanja.model import obdelaj_sliko
 
 
-#Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
-video1_path = 'Video_009_25_4_2025 (1).mp4'
-video2_path = 'Video_006_28_3_2025.mp4'
+video1_path = 'Video_007_25_4_2025.mp4'
+video2_path = 'Video_004_28_3_2025.mp4'
 background_path = r'background.jpg'
 arial_path = 'ARIAL.TTF'
 ding_sound_path = 'ding.mp3'
@@ -30,6 +32,42 @@ ICON_COLORS = { #tole so barve
     "warning": (0, 255, 255), #rumena
     "question": (255, 165, 0) #oranžna
 }
+
+
+def nalozi_model_brez_predpone(model, pot_do_modela, prefix="backbone."):
+    import torch
+
+    # Naloži state_dict
+    state_dict = torch.load(pot_do_modela, map_location=torch.device('cpu'))
+
+    # Odstrani predpono iz imen ključev
+    novi_state_dict = {}
+    for k, v in state_dict.items():
+        if k.startswith(prefix):
+            nov_k = k[len(prefix):]  # odstrani "backbone."
+        else:
+            nov_k = k
+        novi_state_dict[nov_k] = v
+
+    # Naloži popravljene uteži v model
+    model.load_state_dict(novi_state_dict)
+    return model
+
+
+def nalozi_model(pot_do_modela="offset_model.pth"):
+    model = resnet18(pretrained=False)
+    model.fc = torch.nn.Linear(model.fc.in_features, 1)
+    model = nalozi_model_brez_predpone(model, pot_do_modela)
+    model.eval()
+
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5]*3, std=[0.5]*3)
+    ])
+
+    return model, transform
 
 def draw_message_box(frame, message, icon_type="info", x=960, y=200, width=300, height=80):
     overlay = frame.copy() #za risanje messageboxa
@@ -96,7 +134,6 @@ def play_video(video_path, messages, draw_curves=False):
     message_width = target_width - video_width - (2 * PADDING_LEFT)
     video_scale = video_width / original_width
     video_height = int(original_height * video_scale)
-
     frame_height = video_height + (2 * PADDING_TOP_BOTTOM)
 
     background = cv2.imread(background_path) #slika ozdaja lol
@@ -110,6 +147,7 @@ def play_video(video_path, messages, draw_curves=False):
 
     # Za Bezierjeve krivulje (če jih rišemo)
     if draw_curves:
+        model, transform = nalozi_model()
         width, height = target_width, frame_height
         start1 = np.array([50, height - 50]) #fiksna začetna točka 1. krivulje
         end1 = np.array([350, 200])#fiksna končna točka 1. krivulje
@@ -150,21 +188,23 @@ def play_video(video_path, messages, draw_curves=False):
             last_played_sound = -1
 
         if draw_curves:
-            control1 = (start1 + end1) / 2 + np.array([control_offset1, 0])
-            control2 = (start2 + end2) / 2 + np.array([control_offset2, 0])
+            # Pripravimo frame za napoved
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_tensor = transform(frame_rgb).unsqueeze(0)
+            #print(frame_tensor)
+
+            with torch.no_grad():
+                offset_tensor = model(frame_tensor)
+                predicted_offset = offset_tensor.item() * 150  # skaliramo iz [-1,1] v [-150,150]
+
+            control1 = (start1 + end1) / 2 + np.array([predicted_offset, 0])
+            control2 = (start2 + end2) / 2 + np.array([predicted_offset, 0])
             draw_bezier_curve(padded_frame, start1, control1, end1, (0, 255, 0))
             draw_bezier_curve(padded_frame, start2, control2, end2, (0, 0, 255))
 
-            if key == ord('a'): #S TEM KONTROLIRAŠ KRIVULJE A POMENI LEVO
-                control_offset1 = max(control_offset1 - step, -max_offset)
-                control_offset2 = max(control_offset2 - step, -max_offset)
-            elif key == ord('d'):#D POMENI DESNO
-                control_offset1 = min(control_offset1 + step, max_offset)
-                control_offset2 = min(control_offset2 + step, max_offset)
-
         cv2.imshow('CTkMessagebox Style with Arial Font', padded_frame)
 
-        if key == ord('q'): #QUIT BUTTON
+        if key == ord('q'):
             break
 
     cap.release()
