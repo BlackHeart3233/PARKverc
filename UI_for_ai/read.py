@@ -1,9 +1,12 @@
 import cv2
 import numpy as np
 import time
+import numpy as np
+import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 import threading
 import winsound
+import albumentations as A
 
 import sys
 import os
@@ -12,11 +15,11 @@ from model_1.model_odlocanja.model import obdelaj_sliko
 from Stranski_model.yolo_data.stranski_mode import obdelaj_sliko_model_2
 
 #Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
-video1_path = 'Video_009_25_4_2025 (1).mp4'
-video2_path = 'Video_006_28_3_2025.mp4'
-background_path = r'background.jpg'
-arial_path = 'ARIAL.TTF'
-ding_sound_path = 'ding.mp3'
+video1_path = 'UI_for_ai/Video_009_25_4_2025 (1).mp4'
+video2_path = 'UI_for_ai/Video_006_28_3_2025.mp4'
+background_path = r'UI_for_ai/background.jpg'
+arial_path = 'UI_for_ai/ARIAL.TTF'
+ding_sound_path = 'UI_for_ai/ding.mp3'
 
 #some aesthetic zadevice tule
 PADDING_LEFT = 20
@@ -81,7 +84,37 @@ def draw_bezier_curve(img, p0, p1, p2, color):
     for i in range(len(points) - 1):
         cv2.line(img, points[i], points[i+1], color, 3) #dejansko riše krivuljo pol
 
-def play_video(video_path, messages, draw_curves=False):
+def segmentacijaSivinskeSlike(slika_rgb):
+    # Pretvorba v sivinsko sliko s povprečjem po kanalih in skaliranje na 0–255
+    slika_rgb = slika_rgb.mean(2) * 255
+    slika_rgb = slika_rgb.astype(np.uint8)
+
+    #200 razdelki
+    hist, _ = np.histogram(slika_rgb, bins=200, range=(0, 256))
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(slika_rgb, cmap='gray')
+    ax[0].set_title('Originalna sivinska slika')
+    ax[1].plot(hist)
+    ax[1].set_title('Histogram originalne sivinske slike')
+    ax[1].set_xlabel('Sivina')
+    ax[1].set_ylabel('Število pikslov')
+    plt.show()
+
+    prag = 190
+    #vsi piksli temnejši od praga odstanejo
+    objekt = slika_rgb < prag
+
+    plt.figure()
+    plt.imshow(objekt, cmap='seismic')
+    plt.title('Segmentirana objekt')
+    plt.colorbar()
+    plt.show()
+    exit()
+
+
+
+def play_video(video_path, messages, modelView):
     cap = cv2.VideoCapture(video_path) #odpira dat
     if not cap.isOpened():
         print(f"Error opening video file: {video_path}")
@@ -109,7 +142,7 @@ def play_video(video_path, messages, draw_curves=False):
     last_played_sound = -1
 
     # Za Bezierjeve krivulje (če jih rišemo)
-    if draw_curves:
+    if not modelView:
         width, height = target_width, frame_height
         start1 = np.array([50, height - 50]) #fiksna začetna točka 1. krivulje
         end1 = np.array([350, 200])#fiksna končna točka 1. krivulje
@@ -124,8 +157,11 @@ def play_video(video_path, messages, draw_curves=False):
         ret, frame = cap.read() #prebere naslednji okvir iz videa
         if not ret:
             break
-
-        annotated_frame, results = obdelaj_sliko_model_2(frame, 0.64)
+        if modelView:
+            annotated_frame, results = obdelaj_sliko_model_2(frame, 0.64)
+        else:     
+            segmentacijaSivinskeSlike(frame)
+            #annotated_frame, results = obdelaj_sliko(augmentiranFrame, 0.64)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 
@@ -149,7 +185,7 @@ def play_video(video_path, messages, draw_curves=False):
         elif current_message["text"] != "Free parking on right":
             last_played_sound = -1
 
-        if draw_curves:
+        if not modelView:
             control1 = (start1 + end1) / 2 + np.array([control_offset1, 0])
             control2 = (start2 + end2) / 2 + np.array([control_offset2, 0])
             draw_bezier_curve(padded_frame, start1, control1, end1, (0, 255, 0))
@@ -185,5 +221,5 @@ messages_video2 = [
     {"text": "STOP!", "icon": "error"}
 ]
 
-play_video(video1_path, messages_video1, draw_curves=False)  # Prvi video brez črt
-play_video(video2_path, messages_video2, draw_curves=True)   # Drugi video z ukrivljenimi črtami
+#play_video(video1_path, messages_video1, modelView=True)  # Prvi video brez črt
+play_video(video2_path, messages_video2, modelView=False)   # Drugi video z ukrivljenimi črtami
