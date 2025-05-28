@@ -84,33 +84,7 @@ def draw_bezier_curve(img, p0, p1, p2, color):
     for i in range(len(points) - 1):
         cv2.line(img, points[i], points[i+1], color, 3) #dejansko riše krivuljo pol
 
-def segmentacijaSivinskeSlike(slika_rgb):
-    # Pretvorba v sivinsko sliko s povprečjem po kanalih in skaliranje na 0–255
-    slika_rgb = slika_rgb.mean(2) * 255
-    slika_rgb = slika_rgb.astype(np.uint8)
 
-    #200 razdelki
-    hist, _ = np.histogram(slika_rgb, bins=200, range=(0, 256))
-
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(slika_rgb, cmap='gray')
-    ax[0].set_title('Originalna sivinska slika')
-    ax[1].plot(hist)
-    ax[1].set_title('Histogram originalne sivinske slike')
-    ax[1].set_xlabel('Sivina')
-    ax[1].set_ylabel('Število pikslov')
-    plt.show()
-
-    prag = 190
-    #vsi piksli temnejši od praga odstanejo
-    objekt = slika_rgb < prag
-
-    plt.figure()
-    plt.imshow(objekt, cmap='seismic')
-    plt.title('Segmentirana objekt')
-    plt.colorbar()
-    plt.show()
-    exit()
 
 
 
@@ -160,8 +134,7 @@ def play_video(video_path, messages, modelView):
         if modelView:
             annotated_frame, results = obdelaj_sliko_model_2(frame, 0.64)
         else:     
-            segmentacijaSivinskeSlike(frame)
-            #annotated_frame, results = obdelaj_sliko(augmentiranFrame, 0.64)
+            annotated_frame, results = obdelaj_sliko(frame, 0.64)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 
