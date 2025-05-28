@@ -2,9 +2,9 @@ from ultralytics import YOLO
 from model_odlocanja.model import obdelaj_sliko
 import cv2
 
-slika = "test/frame_29.jpg"
+slika = "test/test2.jpg"
 
-annotated_frame, result = obdelaj_sliko(slika)
+annotated_frame, result, _ = obdelaj_sliko(slika)
 
 
 while True:

@@ -13,7 +13,7 @@ from model_1.model_odlocanja.model import obdelaj_sliko
 
 #Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
 video1_path = 'Video_009_25_4_2025 (1).mp4'
-video2_path = 'Video_006_28_3_2025.mp4'
+video2_path = 'IMG_4902.mp4'
 background_path = r'background.jpg'
 arial_path = 'ARIAL.TTF'
 ding_sound_path = 'ding.mp3'
@@ -118,14 +118,14 @@ def play_video(video_path, messages, draw_curves=False):
         control_offset1 = 0
         control_offset2 = 0
         max_offset = 150 #omejitec premika kontrolne otčne
-        step = 10 #korak premika    PO MOZNOSTI SPREMINJAJ TOTE CREDNOSTI DA BO BOLJ IDEALNO
+        step = 30 #korak premika    PO MOZNOSTI SPREMINJAJ TOTE CREDNOSTI DA BO BOLJ IDEALNO
 
     while cap.isOpened(): #ko je video odprt
         ret, frame = cap.read() #prebere naslednji okvir iz videa
         if not ret:
             break
 
-        annotated_frame, results = obdelaj_sliko(frame, 0.64)
+        annotated_frame, results, danger_level = obdelaj_sliko(frame, 0.64)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 
@@ -140,7 +140,11 @@ def play_video(video_path, messages, draw_curves=False):
         if key in [ord(str(i)) for i in range(1, len(messages)+1)]: #to je za kontroliranje sporočil s tipkami
             message_index = key - ord('1')
 
-        current_message = messages[message_index]
+        current_message = messages[danger_level]
+
+        print(f"Current message: {current_message['text']}") #to je za debuganje
+        print(f"Current danger level: {danger_level}") #to je za debuganje
+
         draw_message_box(padded_frame, current_message["text"], icon_type=current_message["icon"])
 
         if current_message["text"] == "Free parking on right" and last_played_sound != message_index: #to aktivira sound effect
@@ -185,5 +189,5 @@ messages_video2 = [
     {"text": "STOP!", "icon": "error"}
 ]
 
-play_video(video1_path, messages_video1, draw_curves=False)  # Prvi video brez črt
+#play_video(video1_path, messages_video1, draw_curves=False)  # Prvi video brez črt
 play_video(video2_path, messages_video2, draw_curves=True)   # Drugi video z ukrivljenimi črtami
