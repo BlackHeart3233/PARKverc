@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model_1.model_odlocanja.model import obdelaj_sliko
-from Stranski_model.yolo_data.stranski_mode import obdelaj_sliko_model_2
+from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 
 #Zaenkrat sem jaz samo svoje videe dala not, to se bo še posodobilo
 video1_path = 'UI_for_ai/Video_009_25_4_2025 (1).mp4'
