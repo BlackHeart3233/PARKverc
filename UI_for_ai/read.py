@@ -96,6 +96,7 @@ def play_video(video_path, messages, draw_curves=False):
     message_width = target_width - video_width - (2 * PADDING_LEFT)
     video_scale = video_width / original_width
     video_height = int(original_height * video_scale)
+    debugger_mode = False
 
     frame_height = video_height + (2 * PADDING_TOP_BOTTOM)
 
@@ -125,7 +126,13 @@ def play_video(video_path, messages, draw_curves=False):
         if not ret:
             break
 
-        annotated_frame, results, danger_level = obdelaj_sliko(frame, 0.64)
+        key = cv2.waitKey(
+            25) & 0xFF  # Čaka 25 ms, kar določa hitrost predvajanja videa. & 0xFF se uporablja za branje vrednosti tipke
+
+        if key == ord('d'):
+            debugger_mode = not debugger_mode
+
+        annotated_frame, results, danger_level = obdelaj_sliko(frame, 0.64, debugger_mode)
 
         resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
 
@@ -135,7 +142,6 @@ def play_video(video_path, messages, draw_curves=False):
             PADDING_LEFT:PADDING_LEFT + video_width
         ] = resized_frame
 
-        key = cv2.waitKey(25) & 0xFF #Čaka 25 ms, kar določa hitrost predvajanja videa. & 0xFF se uporablja za branje vrednosti tipke
 
         if key in [ord(str(i)) for i in range(1, len(messages)+1)]: #to je za kontroliranje sporočil s tipkami
             message_index = key - ord('1')

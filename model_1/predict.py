@@ -2,7 +2,7 @@ from ultralytics import YOLO
 from model_odlocanja.model import obdelaj_sliko
 import cv2
 
-slika = "test/test2.jpg"
+slika = "test/test3.jpg"
 
 annotated_frame, result, _ = obdelaj_sliko(slika)
 
