@@ -20,7 +20,7 @@ if __name__ == '__main__':
         device=0,            # GPU: 0, CPU: 'cpu'
         resume=False,
         project="Stranski_model",  # kam shrani rezultate
-        name="fine_tuned_3"          # ime mape z rezultati
+        name="Stranski_model_04_04_001"          # ime mape z rezultati
     )
 
 #finetuned 3 ma 30 epoches

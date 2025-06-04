@@ -2,13 +2,17 @@ from ultralytics import YOLO
 
 model = YOLO("yolov8n.pt")
 model.train(
-    data="Stranski_model/yolo_data/data.yaml",
-    epochs=50,
+    data="Stranski_model/yolo_data_2/split_train_2/data.yaml",
+    epochs=100,
     imgsz=640,
-    device=0  # 0 = prva GPU naprava
+    batch=16,
+    name="stranski_model_earlystop",
+    early_stopping=5  #overfitting validacijske za val/loss ce se ne izboljsa v 5
 )
 
-#shrani v runs/detect/train/weights/best.pt
+
+
+
 
 '''from ultralytics import YOLO #tole samo testira model
 

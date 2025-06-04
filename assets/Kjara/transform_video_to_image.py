@@ -60,7 +60,7 @@ def extract_frames(video_path, output_dir, frames_per_second=0):
         print(f"Napaka: {e}")
 
 if __name__ == "__main__":
-    videoName = "Video_009_25_4_2025.mp4"
+    videoName = "za_Kjaro.mp4"
     video_path = f"assets/Kjara/video/{videoName}"
     output_dir = f"assets/Kjara/images_from_video/{videoName[:-4]}"
     extract_frames(video_path, output_dir, 25)

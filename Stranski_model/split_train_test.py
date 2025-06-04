@@ -6,7 +6,7 @@ from pathlib import Path
 # Nastavitve poti
 images_root = Path("assets/Kjara/images_from_video")
 labels_root = Path("assets/Kjara/labels_image")
-output_base = Path("Stranski_model/yolo_data/split_train_2")
+output_base = Path("Stranski_model/split_train_everything")
 train_split = 0.8
 
 # Inicializacija map
@@ -50,25 +50,30 @@ copy_files(val_files, "val")
 
 # YAML
 yaml_path = output_base / "data.yaml"
-with open(yaml_path, "w") as f:
+with open(yaml_path, "w", encoding="utf-8") as f:
     f.write(f"""path: {output_base}
 train: images/train
 val: images/val
 names:
-  0: Ball_2025_03_30_20_54
-  1: Bicycle_2025_03_30_20_54
-  2: Bike_2025_03_30_20_54
-  3: Car_2025_03_30_20_54
-  4: Cart_2025_03_30_20_54
-  5: Curb_2025_03_30_20_54
-  6: Human_2025_03_30_20_54
-  7: Pole_2025_03_30_20_54
-  8: Ramp_2025_03_30_20_54
-  9: Parking_line_2025_03_30_20_54
-  10: Electric_car_2025_04_28_10_50
-  11: Family_car_2025_04_28_10_50
-  12: Handicapped_parking_2025_04_28_10_50
+  0: Žoga                   
+  1: Kolo                   
+  2: Motorno_kolo            
+  3: Avtomobil               
+  4: Nakupovalni_vozicek     
+  5: Robnik                  
+  6: Človek               
+  7: Steber                  
+  8: Rampa                  
+  9: Prosto_parkirno_mesto   
+  10: Drevo                  
+  11: Prehod_za_pešce       
+  12: Električno_parkiranje 
+  13: Družinsko_parkiranje  
+  14: Invalidsko_parkiranje  
+  15: Prepovedano_parkiranje 
+  16: Zasebno_parkirišče     
 """)
+
 
 # Log manjkajočih label
 if missing_labels:

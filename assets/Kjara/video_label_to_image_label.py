@@ -18,9 +18,9 @@ name_to_id = {
     "Handicapped_parking_2025_04_28_10_50": 12
 }
 
-videoName = "Video_003_25_4_2025.mp4"
+videoName = "97bad2a6-za_Kjaro.mp4"
 savePath = f"assets/Kjara/labels_image/{videoName[:-4]}/"
-pathJSONMINI = "./assets/Kjara/labels_video/podatki_3_snemanje_7_4_8_9_3video.json"
+pathJSONMINI = "./assets/Kjara/labels_video/podatki_3_snemanje_7_4_8_9__zaKjaro3video.json"
 with open(pathJSONMINI, "r") as file:
     data_all = json.load(file)
 
@@ -46,6 +46,9 @@ for i in range(1,stevilo_framov+1):
 
 for k in range(len(data["box"])): #ponovi se tolikokrat kolikor je obejktov
     if not data["box"][k]['sequence']:
+        continue
+    if 'labels' not in data["box"][k]:
+        print(f"Skipping box {k} because 'labels' key is missing")
         continue
     firstFrame = data["box"][k]['sequence'][0]['frame']
     lastFrame = data["box"][k]['sequence'][-1]['frame']

@@ -1,18 +1,70 @@
 from ultralytics import YOLO
-
-'''def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
+import cv2
+import numpy as np
+'''''
+def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
     model = YOLO(url)
-    return model'''
-
+    return model
+'''
 def nalozi_model():
-    model = YOLO(r"Stranski_model/fine_tuned_3/weights\best.pt")
+    model = YOLO(r"./assets/Kjara/signs/best.pt")
     return model
 
+from ultralytics import YOLO
+import cv2
+import os
 
+can_park = cv2.resize(
+    cv2.imread("./assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
+    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    interpolation=cv2.INTER_AREA
+)
+family_car = cv2.resize(
+    cv2.imread("./assets/Kjara/signs/family_car.jpg", cv2.IMREAD_UNCHANGED),
+    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    interpolation=cv2.INTER_AREA
+)
+electric_car = cv2.resize(
+    cv2.imread("./assets/Kjara/signs/electric_car.jpg", cv2.IMREAD_UNCHANGED),
+    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    interpolation=cv2.INTER_AREA
+)
+car= cv2.resize(
+    cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    (80, 80),  # širina, višina v pikslih – prilagodi po potrebi
+    interpolation=cv2.INTER_AREA
+)
+handicap_parking= cv2.resize(
+    cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    (80, 80),  # širina, višina v pikslih – prilagodi po potrebi
+    interpolation=cv2.INTER_AREA
+)
+def izpisi_obb_info(result, model):
+    obb = result.obb
+    if obb is not None:
+        # Pretvori cls in xywhr v numpy
+        cls_ids = obb.cls.cpu().numpy() if obb.cls is not None else []
+        coords = obb.xywhr.cpu().numpy() if hasattr(obb, 'xywhr') else None
+        confs = obb.conf.cpu().numpy() if obb.conf is not None else []
+
+        if len(cls_ids) > 0 and coords is not None:
+            print(f"🔢 Zaznanih OBB objektov: {len(cls_ids)}")
+            for i, cls_id in enumerate(cls_ids):
+                label_name = model.names[int(cls_id)]
+                coord = coords[i]
+                conf = confs[i] if i < len(confs) else None
+                print(f"✅ Razred: {label_name}, Koordinate OBB (x_c, y_c, w, h, rot): {coord}, Confidence: {conf}")
+        else:
+            print("⚠️ OBB atributi so prazni ali niso dostopni.")
+    else:
+        print("⚠️ OBB ni zaznan.")
+
+
+# 🔧 Inicializacija modela
 model = nalozi_model()
 
-def obdelaj_sliko_model_2(frame, sigurnost = 0.6):
+def obdelaj_sliko_model_2_1(frame, sigurnost = 0.6):
     """
     obdelaj posamezen okvir (sliko) in vrni:
     - označen okvir (annotated image)
@@ -23,3 +75,77 @@ def obdelaj_sliko_model_2(frame, sigurnost = 0.6):
     annotated = results[0].plot()
 
     return annotated, results[0]
+
+def obdelaj_sliko_model_2(frame, sigurnost=0.6):
+    results = model(frame, verbose=False, conf=sigurnost)
+    result = results[0]
+    annotated = frame.copy()
+
+    boxes = result.boxes
+    #print("result.boxes je:", boxes)
+
+    if boxes is not None and boxes.xyxy is not None:
+        coords = boxes.xyxy.cpu().numpy()  # [x1, y1, x2, y2]
+        cls_ids = boxes.cls.cpu().numpy()
+        confs = boxes.conf.cpu().numpy()
+
+        for i, (x1, y1, x2, y2) in enumerate(coords):
+            cls_id = int(cls_ids[i]) if i < len(cls_ids) else -1
+            label = model.names.get(cls_id, "Neznano")
+            conf = confs[i]
+
+            #print(f"🧠 Zaznano: {label} (conf: {conf:.2f})")
+
+            # Določi ikono glede na oznako
+            ikona = None
+            if label == "Rampa": #pravilen
+                ikona = can_park
+            elif label == "Družinsko_parkiranje":
+                ikona = family_car
+            elif label == "Električno_parkiranje":
+                ikona = electric_car
+            elif label == "Invalidsko_parkiranje":
+                ikona = handicap_parking
+            elif label == "Avtomobil": #pravilen
+                ikona = car
+
+            if ikona is not None:
+                center_x = int((x1 + x2) / 2)
+                center_y = int((y1 + y2) / 2)
+                top_left_x = center_x - ikona.shape[1] // 2
+                top_left_y = center_y - ikona.shape[0] // 2
+
+                # Preveri ali je ikona v mejah slike
+                if (0 <= top_left_x < frame.shape[1] - ikona.shape[1]) and (0 <= top_left_y < frame.shape[0] - ikona.shape[0]):
+                    overlay = annotated[top_left_y:top_left_y + ikona.shape[0], top_left_x:top_left_x + ikona.shape[1]]
+
+                    if ikona.shape[2] == 4:
+                        alpha = ikona[:, :, 3] / 255.0
+                        for c in range(3):
+                            overlay[:, :, c] = (1 - alpha) * overlay[:, :, c] + alpha * ikona[:, :, c]
+                    else:
+                        overlay[:, :, :] = ikona
+
+                    annotated[top_left_y:top_left_y + ikona.shape[0], top_left_x:top_left_x + ikona.shape[1]] = overlay
+    else:
+        print("⚠️ Ni zaznanih 'boxes' objektov.")
+
+    return annotated, result
+
+# 🔽 TESTNA FUNKCIJA
+if __name__ == "__main__":
+    pot_do_slike = "./assets/Kjara/images_from_video/Video_009_25_4_2025/frame_155.jpg"
+
+    if not os.path.exists(pot_do_slike):
+        print(f"❌ Napaka: Pot do slike ne obstaja -> {pot_do_slike}")
+    else:
+        frame = cv2.imread(pot_do_slike)
+
+        if frame is None:
+            print("❌ Napaka: Slika ni bila uspešno naložena. Preveri format ali pot.")
+        else:
+            označena, rezultat = obdelaj_sliko_model_2(frame, sigurnost=0.6)
+            cv2.imshow("🔍 Detekcija", označena)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
