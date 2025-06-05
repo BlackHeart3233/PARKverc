@@ -36,7 +36,7 @@ ICON_COLORS = { #tole so barve
 }
 
 
-messages_video1 = [ #seznam sporočil, po možnosti jih spremeni
+messages_video1 = [ 
     {"text": "Looking for parking...", "icon": "question"},
     {"text": "Free parking on right", "icon": "check"},
     {"text": "Handicap parking available", "icon": "check"},
@@ -106,21 +106,17 @@ def draw_bezier_curve(img, p0, p1, p2, color):
 
 
 
-# Global variable to hold the button state
 value_switch = False
 
-# Button parameters
 button_width = 200
 button_height = 50
 
-# Mouse callback function to detect clicks on button
 def mouse_callback(event, x, y, flags, param):
     global value_switch
     total_width, total_height, padding_left_right, padding_top_bottom = param
     
-    # Button position - centered at bottom
     button_x = (total_width - button_width) // 2
-    button_y = total_height - padding_top_bottom + 10  # a bit below the videos
+    button_y = total_height - padding_top_bottom + 10  
     
     if event == cv2.EVENT_LBUTTONDOWN:
         if button_x <= x <= button_x + button_width and button_y <= y <= button_y + button_height:
@@ -170,7 +166,20 @@ def play_videos_with_switch(video1_path, video2_path):
     start_time = time.time()
     
     idx1 = 0
-    idx2 = 0
+
+    important_labels = {
+        "Prosto_parkirno_mesto": 1,
+        "Družinsko_parkiranje": 2,
+        "Električno_parkiranje": 3,
+        "Invalidsko_parkiranje": 4
+    }
+
+    priority_order = [
+        "Prosto_parkirno_mesto",
+        "Družinsko_parkiranje",
+        "Električno_parkiranje",
+        "Invalidsko_parkiranje"
+    ]
 
     while True:
         cap = cap2 if value_switch else cap1
@@ -186,10 +195,10 @@ def play_videos_with_switch(video1_path, video2_path):
         combined_frame = background_resized.copy()
 
         if not value_switch:
-            annotated_frame_1, _ = obdelaj_sliko_model_2(frame, 0.5)
+            annotated_frame_1, label_model = obdelaj_sliko_model_2(frame, 0.5)
             annotated_frame_2, _ = obdelaj_sliko_model_2_1(frame, 0.5)
         else:
-            annotated_frame_1, _ = obdelaj_sliko(frame, 0.5)
+            annotated_frame_1, label_model = obdelaj_sliko(frame, 0.5)
             annotated_frame_2, _ = obdelaj_sliko(frame, 0.5)
 
         if not value_switch:
@@ -210,30 +219,25 @@ def play_videos_with_switch(video1_path, video2_path):
             padding_left_right + resized_frame_left.shape[1] + padding_between + resized_frame_right.shape[1]
         ] = resized_frame_right
 
-        elapsed = time.time() - start_time
-        if elapsed > message_display_time:
-            idx1 = (idx1 + 1) % len(messages_video1)
-            idx2 = (idx2 + 1) % len(messages_video2)
-            start_time = time.time()
+        important_label_found = None
+        for label in priority_order:
+            if label in label_model:
+                important_label_found = label
+                break
 
-        msg1 = messages_video1[idx1]
+        if important_label_found is None:
+            msg = messages_video1[idx1]
+        else:
+            idx = important_labels[important_label_found]
+            msg = messages_video1[idx]
+
         draw_message_box(
             combined_frame,
-            msg1["text"],
-            icon_type=msg1["icon"],
+            msg["text"],
+            icon_type=msg["icon"],
             x=padding_left_right,
             y=padding_top_bottom + resized_frame_left.shape[0] + 10,
             width=resized_frame_left.shape[1],
-            height=50
-        )
-        msg2 = messages_video2[idx2]
-        draw_message_box(
-            combined_frame,
-            msg2["text"],
-            icon_type=msg2["icon"],
-            x=padding_left_right + resized_frame_left.shape[1] + padding_between,
-            y=padding_top_bottom + resized_frame_right.shape[0] + 10,
-            width=resized_frame_right.shape[1],
             height=50
         )
 
@@ -258,6 +262,9 @@ def play_videos_with_switch(video1_path, video2_path):
     cap1.release()
     cap2.release()
     cv2.destroyAllWindows()
+
+
+
 
 
 play_videos_with_switch(video1_path, video2_path)

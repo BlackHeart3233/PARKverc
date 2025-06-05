@@ -8,7 +8,7 @@ def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob
     return model
 '''
 def nalozi_model():
-    model = YOLO(r"./assets/Kjara/signs/best.pt")
+    model = YOLO(r"./assets/Kjara/signs/best_test.pt")
     return model
 
 from ultralytics import YOLO
@@ -17,27 +17,27 @@ import os
 
 can_park = cv2.resize(
     cv2.imread("./assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
-    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 family_car = cv2.resize(
     cv2.imread("./assets/Kjara/signs/family_car.jpg", cv2.IMREAD_UNCHANGED),
-    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 electric_car = cv2.resize(
     cv2.imread("./assets/Kjara/signs/electric_car.jpg", cv2.IMREAD_UNCHANGED),
-    (125, 125),  # širina, višina v pikslih – prilagodi po potrebi
+    (125, 125),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 car= cv2.resize(
     cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
-    (80, 80),  # širina, višina v pikslih – prilagodi po potrebi
+    (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 handicap_parking= cv2.resize(
     cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
-    (80, 80),  # širina, višina v pikslih – prilagodi po potrebi
+    (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 def izpisi_obb_info(result, model):
@@ -61,7 +61,6 @@ def izpisi_obb_info(result, model):
         print("⚠️ OBB ni zaznan.")
 
 
-# 🔧 Inicializacija modela
 model = nalozi_model()
 
 def obdelaj_sliko_model_2_1(frame, sigurnost = 0.6):
@@ -81,11 +80,12 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     result = results[0]
     annotated = frame.copy()
 
+    labels = []  # tukaj bomo zbirali vse labele
+
     boxes = result.boxes
-    #print("result.boxes je:", boxes)
 
     if boxes is not None and boxes.xyxy is not None:
-        coords = boxes.xyxy.cpu().numpy()  # [x1, y1, x2, y2]
+        coords = boxes.xyxy.cpu().numpy()
         cls_ids = boxes.cls.cpu().numpy()
         confs = boxes.conf.cpu().numpy()
 
@@ -94,11 +94,10 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
             label = model.names.get(cls_id, "Neznano")
             conf = confs[i]
 
-            #print(f"🧠 Zaznano: {label} (conf: {conf:.2f})")
+            labels.append(label)  # shrani label v seznam
 
-            # Določi ikono glede na oznako
             ikona = None
-            if label == "Rampa": #pravilen
+            if label == "Prosto_parkirno_mesto":
                 ikona = can_park
             elif label == "Družinsko_parkiranje":
                 ikona = family_car
@@ -106,7 +105,7 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
                 ikona = electric_car
             elif label == "Invalidsko_parkiranje":
                 ikona = handicap_parking
-            elif label == "Avtomobil": #pravilen
+            elif label == "Avtomobil":
                 ikona = car
 
             if ikona is not None:
@@ -115,7 +114,6 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
                 top_left_x = center_x - ikona.shape[1] // 2
                 top_left_y = center_y - ikona.shape[0] // 2
 
-                # Preveri ali je ikona v mejah slike
                 if (0 <= top_left_x < frame.shape[1] - ikona.shape[1]) and (0 <= top_left_y < frame.shape[0] - ikona.shape[0]):
                     overlay = annotated[top_left_y:top_left_y + ikona.shape[0], top_left_x:top_left_x + ikona.shape[1]]
 
@@ -130,7 +128,8 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     else:
         print("⚠️ Ni zaznanih 'boxes' objektov.")
 
-    return annotated, result
+    return annotated, labels  # vrni seznam vseh labelov
+
 
 # 🔽 TESTNA FUNKCIJA
 if __name__ == "__main__":
