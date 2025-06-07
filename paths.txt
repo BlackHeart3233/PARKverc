@@ -1,0 +1,8 @@
+assetsKjaravideo
+assetsKjaralabels_video
+assetsKjaralabels_image
+assetsKjaraaugmented_images
+assetsKjaraimages_from_video
+model_1model_odlocanja__pycache__
+weights
+.pt
