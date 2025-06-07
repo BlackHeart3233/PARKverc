@@ -103,9 +103,6 @@ def draw_bezier_curve(img, p0, p1, p2, color):
         cv2.line(img, points[i], points[i+1], color, 3) #dejansko riše krivuljo pol
 
 
-
-
-
 value_switch = False
 
 button_width = 200
@@ -166,6 +163,19 @@ def play_videos_with_switch(video1_path, video2_path):
     start_time = time.time()
     
     idx1 = 0
+    # Za Bezierjeve krivulje (če jih rišemo)
+    '''
+    if draw_curves:
+            width, height = target_width, frame_height
+            start1 = np.array([50, height - 50]) #fiksna začetna točka 1. krivulje
+            end1 = np.array([350, 200])#fiksna končna točka 1. krivulje
+            start2 = np.array([900, height - 50]) #fiksna začetna točka 2. krivulje
+            end2 = np.array([600, 200])#fiksna končna točka 2 krivulje
+            control_offset1 = 0
+            control_offset2 = 0
+            max_offset = 150 #omejitec premika kontrolne otčne
+            step = 30 #korak premika    PO MOZNOSTI SPREMINJAJ TOTE CREDNOSTI DA BO BOLJ IDEALNO
+        '''
 
     important_labels = {
         "Prosto_parkirno_mesto": 1,
@@ -262,9 +272,62 @@ def play_videos_with_switch(video1_path, video2_path):
     cap1.release()
     cap2.release()
     cv2.destroyAllWindows()
+#annotated_frame, results, danger_level = obdelaj_sliko(frame, 0.64)
 
 
 
 
 
 play_videos_with_switch(video1_path, video2_path)
+'''        current_message = messages[danger_level]
+
+        print(f"Current message: {current_message['text']}") #to je za debuganje
+        print(f"Current danger level: {danger_level}") #to je za debuganje
+
+        draw_message_box(padded_frame, current_message["text"], icon_type=current_message["icon"])
+
+        if current_message["text"] == "Free parking on right" and last_played_sound != message_index: #to aktivira sound effect
+            last_played_sound = message_index
+            play_sound_async(ding_sound_path)
+        elif current_message["text"] != "Free parking on right":
+            last_played_sound = -1
+
+        if draw_curves:
+            control1 = (start1 + end1) / 2 + np.array([control_offset1, 0])
+            control2 = (start2 + end2) / 2 + np.array([control_offset2, 0])
+            draw_bezier_curve(padded_frame, start1, control1, end1, (0, 255, 0))
+            draw_bezier_curve(padded_frame, start2, control2, end2, (0, 0, 255))
+
+            if key == ord('a'): #S TEM KONTROLIRAŠ KRIVULJE A POMENI LEVO
+                control_offset1 = max(control_offset1 - step, -max_offset)
+                control_offset2 = max(control_offset2 - step, -max_offset)
+            elif key == ord('d'):#D POMENI DESNO
+                control_offset1 = min(control_offset1 + step, max_offset)
+                control_offset2 = min(control_offset2 + step, max_offset)
+
+        cv2.imshow('CTkMessagebox Style with Arial Font', padded_frame)
+
+        if key == ord('q'): #QUIT BUTTON
+            break
+
+    cap.release()
+
+cv2.destroyAllWindows()
+
+messages_video1 = [ #seznam sporočil, po možnosti jih spremeni
+    {"text": "Looking for parking...", "icon": "question"},
+    {"text": "Free parking on right", "icon": "check"},
+    {"text": "Handicap parking available", "icon": "check"},
+    {"text": "No parking available", "icon": "error"}
+]
+
+messages_video2 = [
+    {"text": "No obstacles", "icon": "check"},
+    {"text": "Obstacle near", "icon": "question"},
+    {"text": "Obstacle is close!", "icon": "question"},
+    {"text": "STOP!", "icon": "error"}
+]
+
+#play_video(video1_path, messages_video1, draw_curves=False)  # Prvi video brez črt
+play_video(video2_path, messages_video2, draw_curves=True)   # Drugi video z ukrivljenimi črtami
+'''
