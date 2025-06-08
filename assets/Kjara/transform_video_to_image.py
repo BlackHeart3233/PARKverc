@@ -59,8 +59,21 @@ def extract_frames(video_path, output_dir, frames_per_second=0):
     except Exception as e:
         print(f"Napaka: {e}")
 
+def nasloviVideo (path):
+    video_extensions = {".mp4", ".avi", ".mov", ".mkv"}
+    video_files = []
+
+    for filename in os.listdir(path):
+        full_path = os.path.join(path, filename)
+        if os.path.isfile(full_path) and os.path.splitext(filename)[1].lower() in video_extensions:
+            video_files.append(filename)
+    return video_files
+
 if __name__ == "__main__":
-    videoName = "za_Kjaro.mp4"
-    video_path = f"assets/Kjara/video/{videoName}"
-    output_dir = f"assets/Kjara/images_from_video/{videoName[:-4]}"
-    extract_frames(video_path, output_dir, 25)
+    pathFolder = r"C:/Users/kjara/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Testne_meritve/Video"
+    video_files = nasloviVideo(pathFolder)
+    for videoName in video_files:
+        video_path = os.path.join(pathFolder, videoName)
+        output_dir = os.path.join(pathFolder, "Frames_video", videoName[:-4])
+        extract_frames(video_path, output_dir, 25)
+

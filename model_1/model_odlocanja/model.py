@@ -20,9 +20,6 @@ def obdelaj_sliko(frame, sigurnost = 0.6):
 
     annotated = results[0].plot()
 
-<<<<<<< HEAD
-    return annotated, results[0]
-=======
 
     return annotated, results[0], izracunaj_ovire(results[0])
 
@@ -84,4 +81,3 @@ def izracunaj_ovire(results) -> 1 | 2 | 3:
     print(danger_level)
     return danger_level
 
->>>>>>> origin/Development
