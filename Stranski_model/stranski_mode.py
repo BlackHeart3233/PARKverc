@@ -1,19 +1,25 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-'''''
+import paho.mqtt.publish as publish
+'''
 def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
     model = YOLO(url)
     return model
 '''
 def nalozi_model():
-    model = YOLO(r"./assets/Kjara/signs/best_test.pt")
+    model = YOLO(r"./assets/Kjara/best_test.pt")
     return model
 
 from ultralytics import YOLO
 import cv2
 import os
+
+BROKER = "10.0.0.1"
+TOPIC1 = "spo/stevilo_label_na_frame"
+TOPIC2 = "spo/prosto_parkirno_mesto"
+TOPIC3 = "spo/zasedeno_parkirno_mesto"
 
 can_park = cv2.resize(
     cv2.imread("./assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
@@ -83,6 +89,9 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     labels = []  # tukaj bomo zbirali vse labele
 
     boxes = result.boxes
+    steviloLabelov = len(boxes) if boxes is not None else 0
+    free_parking = 0
+    occupied_parking = 0
 
     if boxes is not None and boxes.xyxy is not None:
         coords = boxes.xyxy.cpu().numpy()
@@ -99,14 +108,20 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
             ikona = None
             if label == "Prosto_parkirno_mesto":
                 ikona = can_park
+                free_parking+=1
             elif label == "Družinsko_parkiranje":
                 ikona = family_car
+                occupied_parking+=1
             elif label == "Električno_parkiranje":
                 ikona = electric_car
+                occupied_parking+=1
             elif label == "Invalidsko_parkiranje":
                 ikona = handicap_parking
+                occupied_parking+=1
             elif label == "Avtomobil":
                 ikona = car
+                occupied_parking+=1
+
 
             if ikona is not None:
                 center_x = int((x1 + x2) / 2)
@@ -127,6 +142,11 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
                     annotated[top_left_y:top_left_y + ikona.shape[0], top_left_x:top_left_x + ikona.shape[1]] = overlay
     else:
         print("⚠️ Ni zaznanih 'boxes' objektov.")
+
+    publish.single(TOPIC1, str(steviloLabelov), hostname=BROKER)
+    publish.single(TOPIC2, str(free_parking), hostname=BROKER)
+    publish.single(TOPIC3, str(occupied_parking),hostname=BROKER)
+
 
     return annotated, labels  # vrni seznam vseh labelov
 
