@@ -55,16 +55,16 @@ def izpisi_obb_info(result, model):
         confs = obb.conf.cpu().numpy() if obb.conf is not None else []
 
         if len(cls_ids) > 0 and coords is not None:
-            print(f"🔢 Zaznanih OBB objektov: {len(cls_ids)}")
+            #print(f" Zaznanih OBB objektov: {len(cls_ids)}")
             for i, cls_id in enumerate(cls_ids):
                 label_name = model.names[int(cls_id)]
                 coord = coords[i]
                 conf = confs[i] if i < len(confs) else None
-                print(f"✅ Razred: {label_name}, Koordinate OBB (x_c, y_c, w, h, rot): {coord}, Confidence: {conf}")
+                #print(f"Razred: {label_name}, Koordinate OBB (x_c, y_c, w, h, rot): {coord}, Confidence: {conf}")
         else:
-            print("⚠️ OBB atributi so prazni ali niso dostopni.")
+            print(" OBB atributi so prazni ali niso dostopni.")
     else:
-        print("⚠️ OBB ni zaznan.")
+        print(" OBB ni zaznan.")
 
 
 model = nalozi_model()
@@ -141,7 +141,7 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
 
                     annotated[top_left_y:top_left_y + ikona.shape[0], top_left_x:top_left_x + ikona.shape[1]] = overlay
     else:
-        print("⚠️ Ni zaznanih 'boxes' objektov.")
+        print(" Ni zaznanih 'boxes' objektov.")
 
     #publish.single(TOPIC1, str(steviloLabelov), hostname=BROKER)
     #publish.single(TOPIC2, str(free_parking), hostname=BROKER)
@@ -156,12 +156,12 @@ if __name__ == "__main__":
     pot_do_slike = "../assets/Kjara/images_from_video/Video_009_25_4_2025/frame_155.jpg"
 
     if not os.path.exists(pot_do_slike):
-        print(f"❌ Napaka: Pot do slike ne obstaja -> {pot_do_slike}")
+        print(f" Napaka: Pot do slike ne obstaja -> {pot_do_slike}")
     else:
         frame = cv2.imread(pot_do_slike)
 
         if frame is None:
-            print("❌ Napaka: Slika ni bila uspešno naložena. Preveri format ali pot.")
+            print(" Napaka: Slika ni bila uspešno naložena. Preveri format ali pot.")
         else:
             označena, rezultat = obdelaj_sliko_model_2(frame, sigurnost=0.6)
             cv2.imshow("🔍 Detekcija", označena)
