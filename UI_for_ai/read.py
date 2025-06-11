@@ -18,11 +18,11 @@ from model_1.model_odlocanja.model import obdelaj_sliko
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
-video1_path = 'UI_for_ai/Video_009_25_4_2025.mp4'
-video2_path = 'UI_for_ai/Video_006_28_3_2025.mp4'
-background_path = r'UI_for_ai/background.jpg'
-arial_path = 'UI_for_ai/ARIAL.TTF'
-ding_sound_path = 'UI_for_ai/ding.mp3'
+video1_path = './Video_009_25_4_2025.mp4'
+video2_path = './IMG_4911.mp4'
+background_path = r'./background.jpg'
+arial_path = './ARIAL.TTF'
+ding_sound_path = './ding.mp3'
 
 PADDING_LEFT = 20
 PADDING_TOP_BOTTOM = 20
@@ -48,7 +48,7 @@ messages_video2 = [
     {"text": "No obstacles", "icon": "check"},
     {"text": "Obstacle near", "icon": "question"},
     {"text": "Obstacle is close!", "icon": "question"},
-    {"text": "STOP!", "icon": "error"}
+    {"text": "STOP! Obstacle in the way", "icon": "error"}
 ]
 
 def draw_message_box(frame, message, icon_type="info", x=960, y=200, width=300, height=80):
@@ -107,12 +107,11 @@ def play_videos_with_switch(video1_path, video2_path):
     height1 = int(cap1.get(cv2.CAP_PROP_FRAME_HEIGHT))
     width2 = int(cap2.get(cv2.CAP_PROP_FRAME_WIDTH))
     height2 = int(cap2.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    debugger_mode = False
 
     scale_factor = 0.5
-    video_width_1 = int(width1 * scale_factor)
+    video_width_1 = 500
     video_height_1 = int(height1 * scale_factor)
-    video_width_2 = int(width2 * scale_factor)
+    video_width_2 = 500
     video_height_2 = int(height2 * scale_factor)
 
     padding_between = 30
@@ -145,7 +144,15 @@ def play_videos_with_switch(video1_path, video2_path):
         "Invalidsko_parkiranje"
     ]
 
+    skip_frames = 20
+    frame_counter = 0
+
     while True:
+        frame_counter += 1
+
+        if frame_counter % skip_frames == 0:
+            frame_counter = 0
+            continue
         cap = cap2 if value_switch else cap1
         ret, frame = cap.read()
         if not ret:
@@ -160,8 +167,8 @@ def play_videos_with_switch(video1_path, video2_path):
             annotated_frame_1, label_model = obdelaj_sliko_model_2(frame, 0.5)
             annotated_frame_2, _ = obdelaj_sliko_model_2_1(frame, 0.5)
         else:
-            annotated_frame_1, label_model, danger_level = obdelaj_sliko(frame, 0.5)
-            annotated_frame_2, _, _ = obdelaj_sliko(frame, 0.5)
+            annotated_frame_1, label_model, danger_level = obdelaj_sliko(frame, 0.5, False)
+            annotated_frame_2, _, _ = obdelaj_sliko(frame, 0.5, True)
 
         resized_frame_left = cv2.resize(annotated_frame_1, (video_width_1, video_height_1))
         resized_frame_right = cv2.resize(annotated_frame_2, (video_width_1, video_height_1))
@@ -179,9 +186,7 @@ def play_videos_with_switch(video1_path, video2_path):
 
         if value_switch:
             danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
-            print("danger lvl je: ",danger_level)
             msg = messages_video2[danger_level]
-            print("msg je: ",msg)
         else:
             important_label_found = None
             for label in priority_order:

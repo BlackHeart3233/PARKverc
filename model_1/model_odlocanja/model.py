@@ -1,4 +1,6 @@
 from ultralytics import YOLO
+import cv2
+from pathlib import Path
 
 custom_imena = {
     0: 'Žoga',
@@ -21,7 +23,11 @@ def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_s_crtami/reso
     model = YOLO(url)
     return model
 
-model = nalozi_model()
+path = Path("../model_1/runs/obb/train7/weights/best.pt")
+print("📂 Absolutna pot:", path.resolve())
+print("✅ Obstaja?", path.exists())
+
+model = nalozi_model(str(path))
 
 PARKING_LINE_CLASS_ID = 7
 ZEBRA_CLASS_ID = 11
@@ -36,10 +42,51 @@ def obdelaj_sliko(frame, sigurnost = 0.6, debugger_mode = False):
     results[0].names = custom_imena
     annotated = results[0].plot()
 
-    if debugger_mode:
-        return frame, results[0], izracunaj_ovire(results[0])
+    if not debugger_mode:
+        slika = pripravi_rezultat(frame, results)
+        return slika, results[0], izracunaj_ovire(results[0])
     else:
         return annotated, results[0], izracunaj_ovire(results[0])
+
+import numpy as np
+import cv2
+
+# zaenkrat samo rišemo črte
+
+def pripravi_rezultat(frame, results):
+    frame_copy = frame.copy()
+
+    if hasattr(results[0], 'obb') and results[0].obb is not None:
+        for i, obb_data_row in enumerate(results[0].obb.xywhr):
+            cls_id = results[0].obb.cls[i].item()
+            if cls_id == PARKING_LINE_CLASS_ID:
+                x, y, w, h, angle = obb_data_row.tolist()
+
+                if w <= 0 or h <= 0:
+                    continue
+
+                cos_a = np.cos(angle)
+                sin_a = np.sin(angle)
+
+                w2 = w / 2
+                h2 = h / 2
+
+                corners = np.array([
+                    [-w2, -h2],
+                    [ w2, -h2],
+                    [ w2,  h2],
+                    [-w2,  h2]
+                ])
+
+                rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+                rotated_corners = np.dot(corners, rotation_matrix.T) + np.array([x, y])
+
+                pts = np.int32(rotated_corners).reshape((-1, 1, 2))
+
+                hull = cv2.convexHull(pts)
+                cv2.drawContours(frame_copy, [hull], 0, (0, 255, 0), 2)
+
+    return frame_copy
 
 
 def izracunaj_ovire(results) -> int:
@@ -49,9 +96,9 @@ def izracunaj_ovire(results) -> int:
     image_width = results.orig_shape[1]
     image_height = results.orig_shape[0]
 
-    left_boundary = image_width * 0.3
-    right_boundary = image_width * 0.7
-    bottom_threshold = image_height * 0.7
+    left_boundary = image_width * 0.35
+    right_boundary = image_width * 0.65
+    bottom_threshold = image_height * 0.9
 
     danger_level = 0
 
