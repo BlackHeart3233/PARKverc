@@ -13,7 +13,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from model_1.model_odlocanja.model import obdelaj_sliko, izpisi_in_izlusci
 
-video1_path = 'Video_007_25_4_2025.mp4'
+video1_path = 'IMG_4905.mp4'
 video2_path = 'IMG_4905.mp4'
 background_path = r'background.jpg'
 arial_path = 'ARIAL.TTF'
@@ -31,41 +31,6 @@ ICON_COLORS = { #tole so barve
     "warning": (0, 255, 255), #rumena
 }
 
-
-def nalozi_model_brez_predpone(model, pot_do_modela, prefix="backbone."):
-    import torch
-
-    # Naloži state_dict
-    state_dict = torch.load(pot_do_modela, map_location=torch.device('cpu'))
-
-    # Odstrani predpono iz imen ključev
-    novi_state_dict = {}
-    for k, v in state_dict.items():
-        if k.startswith(prefix):
-            nov_k = k[len(prefix):]  # odstrani "backbone."
-        else:
-            nov_k = k
-        novi_state_dict[nov_k] = v
-
-    # Naloži popravljene uteži v model
-    model.load_state_dict(novi_state_dict)
-    return model
-
-
-def nalozi_model(pot_do_modela="offset_model.pth"):
-    model = resnet18(pretrained=False)
-    model.fc = torch.nn.Linear(model.fc.in_features, 1)
-    model = nalozi_model_brez_predpone(model, pot_do_modela)
-    model.eval()
-
-    transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5]*3, std=[0.5]*3)
-    ])
-
-    return model, transform
 
 def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom_point_left=None, bottom_point_right=None):
     if top_point is None or bottom_point_left is None or bottom_point_right is None:
@@ -97,8 +62,6 @@ def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom
         offset = -max_offset
 
     return offset
-
-
 
 
 def draw_message_box(frame, message, icon_type="info", x=960, y=200, width=300, height=80):
@@ -178,7 +141,6 @@ def play_video(video_path, messages, draw_curves=False):
     last_played_sound = -1
 
     if draw_curves:
-        model, transform = nalozi_model()
         width, height = target_width, frame_height
         start1 = np.array([50, height - 50])
         end1 = np.array([350, 200])
