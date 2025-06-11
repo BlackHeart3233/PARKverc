@@ -107,6 +107,7 @@ def play_videos_with_switch(video1_path, video2_path):
     height1 = int(cap1.get(cv2.CAP_PROP_FRAME_HEIGHT))
     width2 = int(cap2.get(cv2.CAP_PROP_FRAME_WIDTH))
     height2 = int(cap2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    debugger_mode = False
 
     scale_factor = 0.5
     video_width_1 = int(width1 * scale_factor)
