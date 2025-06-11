@@ -19,7 +19,7 @@ from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
 video1_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
-video2_path =[]
+video2_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
 
 background_path = r'UI_for_ai/background.jpg'
 arial_path = 'UI_for_ai/ARIAL.TTF'

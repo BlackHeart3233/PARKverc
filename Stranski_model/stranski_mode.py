@@ -2,8 +2,8 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 #import paho.mqtt.publish as publish
-'''
-def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
+
+def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/resolve/main/stranski_model_04_06_2025_dodane_oznake/weights/best_test.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
     model = YOLO(url)
     return model
@@ -11,7 +11,7 @@ def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob
 def nalozi_model():
     model = YOLO(r"./assets/Kjara/best_test.pt")
     return model
-
+'''
 from ultralytics import YOLO
 import cv2
 import os
