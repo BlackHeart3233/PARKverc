@@ -83,12 +83,12 @@ def izpisi_in_izlusci(result):
         coords = obb.xywhr.cpu().numpy()
         confs = obb.conf.cpu().numpy() if obb.conf is not None else [-1.0]*len(cls_ids)
 
-        print(f"🔷 Detektiranih OBB objektov: {len(cls_ids)}")
+        #print(f" Detektiranih OBB objektov: {len(cls_ids)}")
         for i, cls_id in enumerate(cls_ids):
             label = model.names[int(cls_id)]
             coord = coords[i]
             conf = confs[i] if i < len(confs) else -1
-            print(f"OBB: ✅ Razred: {label}, Koordinate: {coord}, Confidence: {conf:.2f}")
+           # print(f"OBB:  Razred: {label}, Koordinate: {coord}, Confidence: {conf:.2f}")
 
             oznake.append({
                 "type": "obb",
@@ -103,12 +103,12 @@ def izpisi_in_izlusci(result):
         coords = result.boxes.xyxy.cpu().numpy()
         confs = result.boxes.conf.cpu().numpy() if result.boxes.conf is not None else [-1.0]*len(class_ids)
 
-        print(f"🔳 Detektiranih standardnih boxov: {len(class_ids)}")
+        #print(f" Detektiranih standardnih boxov: {len(class_ids)}")
         for i, cls_id in enumerate(class_ids):
             label = model.names[int(cls_id)]
             coord = coords[i]
             conf = confs[i] if i < len(confs) else -1
-            print(f"Box: ✅ Razred: {label}, Koordinate: {coord}, Confidence: {conf:.2f}")
+            #print(f"Box:  Razred: {label}, Koordinate: {coord}, Confidence: {conf:.2f}")
 
             oznake.append({
                 "type": "box",
@@ -119,6 +119,6 @@ def izpisi_in_izlusci(result):
             })
 
     else:
-        print("⚠️ Ni zaznanih oznak ali OBB podatkov.")
+        print(" Ni zaznanih oznak ali OBB podatkov.")
 
     return oznake

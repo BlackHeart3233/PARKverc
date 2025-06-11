@@ -89,7 +89,7 @@ def mouse_callback(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         if button_x <= x <= button_x + button_width and button_y <= y <= button_y + button_height:
             value_switch = not value_switch
-            print(f"VALUE SWITCH toggled: {value_switch}")
+            #print(f"VALUE SWITCH toggled: {value_switch}")
 
 value_switch = False
 button_width = 200
@@ -129,7 +129,7 @@ def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom
     elif offset < -max_offset:
         offset = -max_offset
 
-    print("OFFSET JE: ", offset)
+    #print("OFFSET JE: ", offset)
     return offset
 
 def bezier_quad(p0, p1, p2, t): #to je za one krivulje ko se izrisujejo
@@ -166,7 +166,7 @@ def najdi_offset_po_y(oznaka_podatki):
         return 0
 
     offset = int(np.sqrt(najvisja_x**2 + najvisja_y**2))
-    print(f"Najvišja Parking_line oznaka: x={najvisja_x}, y={najvisja_y}, offset={offset}")
+    #print(f"Najvišja Parking_line oznaka: x={najvisja_x}, y={najvisja_y}, offset={offset}")
     return offset
 
 
@@ -282,9 +282,9 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
                 # Inicializacija danger_level na neko privzeto vrednost, npr. 0
                 danger_level = 0  # ali pridobi iz rezultata obdelave, če to kasneje implementiraš
                 danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
-                print("danger lvl je: ", danger_level)
+                #print("danger lvl je: ", danger_level)
                 msg = messages_video2[danger_level]
-                print("msg je: ", msg)
+                #print("msg je: ", msg)
             else:
                 danger_level = 0  # tudi tu dodaš default, da ne pride do napake
                 danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
