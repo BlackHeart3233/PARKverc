@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import paho.mqtt.publish as publish
+#import paho.mqtt.publish as publish
 '''
 def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
@@ -143,9 +143,9 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     else:
         print("⚠️ Ni zaznanih 'boxes' objektov.")
 
-    publish.single(TOPIC1, str(steviloLabelov), hostname=BROKER)
-    publish.single(TOPIC2, str(free_parking), hostname=BROKER)
-    publish.single(TOPIC3, str(occupied_parking),hostname=BROKER)
+    #publish.single(TOPIC1, str(steviloLabelov), hostname=BROKER)
+    #publish.single(TOPIC2, str(free_parking), hostname=BROKER)
+    #publish.single(TOPIC3, str(occupied_parking),hostname=BROKER)
 
 
     return annotated, labels  # vrni seznam vseh labelov

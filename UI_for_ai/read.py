@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 import threading
 import winsound
-import albumentations as A
-import paho.mqtt.publish as publish
+import albumentations as Aq
+#import paho.mqtt.publish as publish
 
 BROKER = "10.0.0.1"
 TOPIC1 = "spo/procesirane_slike"
@@ -178,7 +178,9 @@ def play_videos_with_switch(video1_path, video2_path):
 
         if value_switch:
             danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
+            print("danger lvl je: ",danger_level)
             msg = messages_video2[danger_level]
+            print("msg je: ",msg)
         else:
             important_label_found = None
             for label in priority_order:
@@ -219,7 +221,7 @@ def play_videos_with_switch(video1_path, video2_path):
             break
 
         ProcessedPic += 1
-        publish.single(TOPIC1, ProcessedPic, hostname=BROKER)
+        #publish.single(TOPIC1, ProcessedPic, hostname=BROKER)
 
     cap1.release()
     cap2.release()
