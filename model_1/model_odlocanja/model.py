@@ -78,6 +78,6 @@ def izracunaj_ovire(results) -> 1 | 2 | 3:
                     danger_level = 3
 
 
-    print(danger_level)
+    #print(danger_level)
     return danger_level
 
