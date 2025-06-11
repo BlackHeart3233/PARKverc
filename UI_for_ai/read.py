@@ -11,11 +11,10 @@ from torchvision.models import resnet18
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from model_1.model_odlocanja.model import obdelaj_sliko
-
+from model_1.model_odlocanja.model import obdelaj_sliko, izpisi_in_izlusci
 
 video1_path = 'Video_007_25_4_2025.mp4'
-video2_path = 'Video_004_28_3_2025.mp4'
+video2_path = 'IMG_4905.mp4'
 background_path = r'background.jpg'
 arial_path = 'ARIAL.TTF'
 ding_sound_path = 'ding.mp3'
@@ -30,7 +29,6 @@ ICON_COLORS = { #tole so barve
     "check": (0, 255, 0), #zlena
     "error": (0, 0, 255), #rdeča
     "warning": (0, 255, 255), #rumena
-    "question": (255, 165, 0) #oranžna
 }
 
 
@@ -68,6 +66,40 @@ def nalozi_model(pot_do_modela="offset_model.pth"):
     ])
 
     return model, transform
+
+def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom_point_left=None, bottom_point_right=None):
+    if top_point is None or bottom_point_left is None or bottom_point_right is None:
+        # Če ni podatkov o trikotniku, izračunaj offset glede na središče slike
+        ref_x = width // 2
+    else:
+        base_center = (np.array(bottom_point_left) + np.array(bottom_point_right)) / 2
+        midline_point = (base_center + np.array(top_point)) / 2
+        ref_x = midline_point[0]
+
+    offset = None
+    min_dist = float('inf')
+
+    for oznaka in oznaka_podatki:
+        if oznaka["label"] == "Parking_line":
+            x_center = oznaka["bbox"][0]
+            dist = abs(x_center - ref_x)
+            if dist < min_dist:
+                min_dist = dist
+                offset = x_center - ref_x
+
+    if offset is None:
+        offset = 0
+
+    max_offset = 150
+    if offset > max_offset:
+        offset = max_offset
+    elif offset < -max_offset:
+        offset = -max_offset
+
+    return offset
+
+
+
 
 def draw_message_box(frame, message, icon_type="info", x=960, y=200, width=300, height=80):
     overlay = frame.copy() #za risanje messageboxa
@@ -120,7 +152,7 @@ def draw_bezier_curve(img, p0, p1, p2, color):
         cv2.line(img, points[i], points[i+1], color, 3) #dejansko riše krivuljo pol
 
 def play_video(video_path, messages, draw_curves=False):
-    cap = cv2.VideoCapture(video_path) #odpira dat
+    cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"Error opening video file: {video_path}")
         return
@@ -128,7 +160,7 @@ def play_video(video_path, messages, draw_curves=False):
     original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    target_width = 1280     #tole so dimenzije za celoten ui
+    target_width = 1280
     target_height = 480
     video_width = int(target_width * 0.75) - (2 * PADDING_LEFT)
     message_width = target_width - video_width - (2 * PADDING_LEFT)
@@ -136,7 +168,7 @@ def play_video(video_path, messages, draw_curves=False):
     video_height = int(original_height * video_scale)
     frame_height = video_height + (2 * PADDING_TOP_BOTTOM)
 
-    background = cv2.imread(background_path) #slika ozdaja lol
+    background = cv2.imread(background_path)
     if background is None:
         print(f"Error loading background image: {background_path}")
         return
@@ -145,62 +177,77 @@ def play_video(video_path, messages, draw_curves=False):
     message_index = 0
     last_played_sound = -1
 
-    # Za Bezierjeve krivulje (če jih rišemo)
     if draw_curves:
         model, transform = nalozi_model()
         width, height = target_width, frame_height
-        start1 = np.array([50, height - 50]) #fiksna začetna točka 1. krivulje
-        end1 = np.array([350, 200])#fiksna končna točka 1. krivulje
-        start2 = np.array([900, height - 50]) #fiksna začetna točka 2. krivulje
-        end2 = np.array([600, 200])#fiksna končna točka 2 krivulje
-        control_offset1 = 0
-        control_offset2 = 0
-        max_offset = 150 #omejitec premika kontrolne otčne
-        step = 10 #korak premika    PO MOZNOSTI SPREMINJAJ TOTE CREDNOSTI DA BO BOLJ IDEALNO
+        start1 = np.array([50, height - 50])
+        end1 = np.array([350, 200])
+        start2 = np.array([900, height - 50])
+        end2 = np.array([600, 200])
+        current_offset = 0
+        step = 10
 
-    while cap.isOpened(): #ko je video odprt
-        ret, frame = cap.read() #prebere naslednji okvir iz videa
+    while cap.isOpened():
+        ret, frame = cap.read()
         if not ret:
             break
 
         annotated_frame, results = obdelaj_sliko(frame, 0.64)
+        oznaka_podatki = izpisi_in_izlusci(results)
 
-        resized_frame = cv2.resize(annotated_frame, (video_width, video_height)) #prilagaja velikosti. possibly problem za naprej
+        height, width = frame.shape[:2]
+        offset = najdi_offset_iz_oznaka(oznaka_podatki, width, height)
+        offset = offset  # brez minusa, kot želiš
+
+        resized_frame = cv2.resize(annotated_frame, (video_width, video_height))
 
         padded_frame = background_resized.copy()
-        padded_frame[ #aestheticsss
-            PADDING_TOP_BOTTOM:PADDING_TOP_BOTTOM + video_height,
-            PADDING_LEFT:PADDING_LEFT + video_width
-        ] = resized_frame
+        padded_frame[PADDING_TOP_BOTTOM:PADDING_TOP_BOTTOM + video_height,
+                     PADDING_LEFT:PADDING_LEFT + video_width] = resized_frame
 
-        key = cv2.waitKey(25) & 0xFF #Čaka 25 ms, kar določa hitrost predvajanja videa. & 0xFF se uporablja za branje vrednosti tipke
+        key = cv2.waitKey(25) & 0xFF
 
-        if key in [ord(str(i)) for i in range(1, len(messages)+1)]: #to je za kontroliranje sporočil s tipkami
+        if key in [ord(str(i)) for i in range(1, len(messages)+1)]:
             message_index = key - ord('1')
 
         current_message = messages[message_index]
         draw_message_box(padded_frame, current_message["text"], icon_type=current_message["icon"])
 
-        if current_message["text"] == "Free parking on right" and last_played_sound != message_index: #to aktivira sound effect
+        if current_message["text"] == "Free parking on right" and last_played_sound != message_index:
             last_played_sound = message_index
             play_sound_async(ding_sound_path)
         elif current_message["text"] != "Free parking on right":
             last_played_sound = -1
 
         if draw_curves:
-            # Pripravimo frame za napoved
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_tensor = transform(frame_rgb).unsqueeze(0)
-            #print(frame_tensor)
+            if current_offset < offset:
+                current_offset = min(current_offset + step, offset)
+            elif current_offset > offset:
+                current_offset = max(current_offset - step, offset)
+        else:
+            current_offset = offset
 
-            with torch.no_grad():
-                offset_tensor = model(frame_tensor)
-                predicted_offset = offset_tensor.item() * 150  # skaliramo iz [-1,1] v [-150,150]
-
-            control1 = (start1 + end1) / 2 + np.array([predicted_offset, 0])
-            control2 = (start2 + end2) / 2 + np.array([predicted_offset, 0])
+        if draw_curves:
+            control1 = (start1 + end1) / 2 + np.array([-current_offset, 0])
+            control2 = (start2 + end2) / 2 + np.array([-current_offset, 0])
             draw_bezier_curve(padded_frame, start1, control1, end1, (0, 255, 0))
             draw_bezier_curve(padded_frame, start2, control2, end2, (0, 0, 255))
+
+            bottom_point_left = tuple(bezier_quad(start1, control1, end1, 0.0).astype(int))
+            bottom_point_right = tuple(bezier_quad(start2, control2, end2, 0.0).astype(int))
+
+            top_point_x = (bottom_point_left[0] + bottom_point_right[0]) // 2
+            top_point_y = int(height * 0.30)
+            top_point = (top_point_x, top_point_y)
+
+            #triangle_cnt = np.array([top_point, bottom_point_left, bottom_point_right])
+            #cv2.drawContours(padded_frame, [triangle_cnt], 0, (255, 255, 0), -1)
+
+            offset = najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point, bottom_point_left,
+                                            bottom_point_right)
+        else:
+            offset = najdi_offset_iz_oznaka(oznaka_podatki, width, height, (0, 0), (0, 0),
+                                            (0, 0))  # če ni krivulj, lahko daš dummy vrednosti ali preurediš funkcijo
 
         cv2.imshow('CTkMessagebox Style with Arial Font', padded_frame)
 
@@ -208,8 +255,8 @@ def play_video(video_path, messages, draw_curves=False):
             break
 
     cap.release()
+    cv2.destroyAllWindows()
 
-cv2.destroyAllWindows()
 
 messages_video1 = [ #seznam sporočil, po možnosti jih spremeni
     {"text": "Looking for parking...", "icon": "question"},

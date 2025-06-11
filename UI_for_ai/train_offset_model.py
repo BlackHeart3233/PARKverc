@@ -1,50 +1,66 @@
 import os
 import json
-from PIL import Image
+import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from torchvision import models, transforms
 
 # ====================
-# 1. Dataset
+# 1. Dataset - uporablja labels_mini.json
 # ====================
 
-class OffsetDataset(Dataset):
+class OffsetFromLabelsMiniDataset(Dataset):
     def __init__(self, data_dir):
         self.data_dir = data_dir
-        with open(os.path.join(data_dir, "labels.json")) as f:
+        # Naloži samo labels_mini.json
+        with open(os.path.join(data_dir, "labels_mini.json")) as f:
             self.labels = json.load(f)
-        self.images = list(self.labels.keys())
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # [-1, 1] skala
-        ])
+
+        self.samples = list(self.labels.items())
 
     def __len__(self):
-        return len(self.images)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        img_name = self.images[idx]
-        img_path = os.path.join(self.data_dir, img_name)
-        image = Image.open(img_path).convert("RGB")
-        offset = self.labels[img_name]
-        offset = offset / 150.0  # normaliziraj v [-1, 1]
-        return self.transform(image), torch.tensor([offset], dtype=torch.float32)
+        filename, sample = self.samples[idx]
+
+        offset = sample["offset"] / 150.0  # normaliziraj offset [-1,1]
+        img_w, img_h = sample.get("img_size", [1, 1])
+        detections = sample.get("detections", [])
+
+        # Vzemi do 4 bbox center točk (x, y), normalizirane na dimenzije slike
+        centers = []
+        for det in detections[:4]:
+            cx, cy = det["center"]
+            centers.extend([cx / img_w, cy / img_h])
+
+        # Če manj kot 4, dopolni z ničlami
+        while len(centers) < 8:
+            centers.append(0.0)
+
+        input_vec = np.array(centers, dtype=np.float32)
+
+        return torch.tensor(input_vec), torch.tensor([offset], dtype=torch.float32)
+
 
 # ====================
-# 2. Model
+# 2. Model - preprost MLP
 # ====================
 
-class OffsetRegressor(nn.Module):
+class OffsetRegressorFromCoords(nn.Module):
     def __init__(self):
         super().__init__()
-        self.backbone = models.resnet18(pretrained=True)
-        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, 1)  # output: offset
+        self.net = nn.Sequential(
+            nn.Linear(8, 64),  # 8 vhodnih vrednosti (do 4 točke (x,y))
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
 
     def forward(self, x):
-        return self.backbone(x)
+        return self.net(x)
+
 
 # ====================
 # 3. Trening
@@ -52,33 +68,34 @@ class OffsetRegressor(nn.Module):
 
 def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = OffsetDataset("training_data")
+    dataset = OffsetFromLabelsMiniDataset("training_data")
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
-    model = OffsetRegressor().to(device)
+    model = OffsetRegressorFromCoords().to(device)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-    for epoch in range(10):  # lahko povečaš kasneje
+    for epoch in range(1000):
         running_loss = 0.0
-        for images, offsets in dataloader:
-            images = images.to(device)
+        for inputs, offsets in dataloader:
+            inputs = inputs.to(device)
             offsets = offsets.to(device)
 
-            preds = model(images)
+            preds = model(inputs)
             loss = criterion(preds, offsets)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item() * images.size(0)
+            running_loss += loss.item() * inputs.size(0)
 
         avg_loss = running_loss / len(dataset)
-        print(f"Epoch {epoch+1}: Loss = {avg_loss:.4f}")
+        print(f"Epoch {epoch+1}: Loss = {avg_loss:.6f}")
 
-    torch.save(model.state_dict(), "offset_model.pth")
-    print("✔ Model shranjen v offset_model.pth")
+    torch.save(model.state_dict(), "offset_model_from_coords.pth")
+    print("✔ Model shranjen v offset_model_from_coords.pth")
+
 
 if __name__ == "__main__":
     train()
