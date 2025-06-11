@@ -18,12 +18,12 @@ from model_1.model_odlocanja.model import obdelaj_sliko, izpisi_in_izlusci
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
-video1_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
-video2_path =[]
+video1_path =['./Video_004_25_4_2025.mp4','./Video_009_25_4_2025.mp4','./Video_005_25_4_2025.mp4']
+video2_path =['./IMG_4911.mp4']
 
-background_path = r'UI_for_ai/background.jpg'
-arial_path = 'UI_for_ai/ARIAL.TTF'
-ding_sound_path = 'UI_for_ai/ding.mp3'
+background_path = r'./background.jpg'
+arial_path = './ARIAL.TTF'
+ding_sound_path = './ding.mp3'
 
 PADDING_LEFT = 20
 PADDING_TOP_BOTTOM = 20
@@ -209,9 +209,9 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
         height2 = int(cap2.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         scale_factor = 0.5
-        video_width_1 = int(width1 * scale_factor)
+        video_width_1 = 600
         video_height_1 = int(height1 * scale_factor)
-        video_width_2 = int(width2 * scale_factor)
+        video_width_2 = 600
         video_height_2 = int(height2 * scale_factor)
 
         padding_between = 30
@@ -256,12 +256,14 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             combined_frame = background_resized.copy()
             oznaka_podatki = {}
 
+            danger_level = 0
             if not value_switch:
                 annotated_frame_1, label_model = obdelaj_sliko_model_2(frame, 0.5)
                 annotated_frame_2, _ = obdelaj_sliko_model_2_1(frame, 0.5)
             else:
-                annotated_frame_1, result = obdelaj_sliko(frame, 0.5, False)
-                annotated_frame_2, _ = obdelaj_sliko(frame, 0.5, True)
+                annotated_frame_1, result, danger_level_app = obdelaj_sliko(frame, 0.5, False)
+                annotated_frame_2, _, _ = obdelaj_sliko(frame, 0.5, True)
+                danger_level = danger_level_app
                 oznaka_podatki = izpisi_in_izlusci(result)
 
             resized_frame_left = cv2.resize(annotated_frame_1, (video_width_1, video_height_1))
@@ -278,7 +280,9 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
                 padding_left_right + resized_frame_left.shape[1] + padding_between + resized_frame_right.shape[1]
             ] = resized_frame_right
 
-            if value_switch:
+            if danger_level:
+                msg = messages_video2[danger_level]
+            elif value_switch:
                 # Inicializacija danger_level na neko privzeto vrednost, npr. 0
                 danger_level = 0  # ali pridobi iz rezultata obdelave, če to kasneje implementiraš
                 danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
