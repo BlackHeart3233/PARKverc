@@ -6,7 +6,7 @@ import threading
 import winsound
 import torch
 from torchvision import transforms
-from torchvision.models import resnet18
+
 
 import sys
 import os
