@@ -3,8 +3,6 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
-import threading
-import winsound
 import albumentations as Aq
 #import paho.mqtt.publish as publish
 
@@ -18,11 +16,11 @@ from model_1.model_odlocanja.model import obdelaj_sliko
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
-video1_path = 'UI_for_ai/Video_009_25_4_2025.mp4'
-video2_path = 'UI_for_ai/Video_006_28_3_2025.mp4'
+video1_path = 'UI_for_ai/Video_004_25_4_2025.mp4'
+video2_path = 'UI_for_ai/Video_004_25_4_2025.mp4'
 background_path = r'UI_for_ai/background.jpg'
 arial_path = 'UI_for_ai/ARIAL.TTF'
-ding_sound_path = 'UI_for_ai/ding.mp3'
+ding_sound_path = 'UI_for_aiding.mp3'
 
 PADDING_LEFT = 20
 PADDING_TOP_BOTTOM = 20
@@ -77,7 +75,7 @@ def draw_message_box(frame, message, icon_type="info", x=960, y=200, width=300, 
     frame[:] = np.array(pil_image)
 
 def play_sound_async(wav_file):
-    threading.Thread(target=winsound.PlaySound, args=(wav_file, winsound.SND_FILENAME | winsound.SND_ASYNC), daemon=True).start()
+    pass
 
 def mouse_callback(event, x, y, flags, param):
     global value_switch

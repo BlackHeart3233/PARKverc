@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.mp4
+*.png
+*.jpg
+*.kra
+*.mov
+venv/
+.git/
+weights
