@@ -1,0 +1,25 @@
+stages:
+  - test
+  - deploy
+
+# run tests on push to release
+unit_tests:
+  stage: test
+  only:
+    - release
+  script:
+    - echo "Running tests..."
+    - pip install -r requirements.txt
+    - pytest tests/
+    - docker build -t parkverc-app .
+    - docker stop parkverc || true
+    - docker rm parkverc || true
+    - docker run -d --name parkverc -p 5000:5000 parkverc
+
+# deploy
+deploy:
+  stage: deploy
+  only:
+    - release
+  script:
+    - echo "Deploying"
