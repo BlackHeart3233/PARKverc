@@ -27,7 +27,7 @@ def transform(slika_path,savePath):
             A.CLAHE(clip_limit=8.0, tile_grid_size=(8, 8), p=1.0),  #izboljša kontrast
             #clip_limit maksimalna vrednost za omejitev kontrasta (višja vrednost = bolj poudarjen kontrast)
             #velikost mreže na katero se slika razdeli za lokalno izboljšavo kontrasta
-            A.Sharpen(alpha=(0.5, 1.0), lightness=(1.0, 1.5), p=1.0),  #izostrimo robove belih črt
+            A.Sharpen(alpha=(0.5, 1.0), lightness=(1.0, 1.5), p=1.0),  #izostrimo robove črt
             #alpha = intenzivnost izostritve
             #svetlost poudarjenih robov
             A.RandomBrightnessContrast(brightness_limit=(0.2, 0.4), contrast_limit=(0.6, 1.0), p=1.0)  #povečamo svetlost in kontrast
