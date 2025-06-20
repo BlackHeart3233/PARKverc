@@ -10,69 +10,61 @@ model = nalozi_model()
 
 PARKING_LINE_CLASS_ID = 7
 
-
-def obdelaj_sliko(frame, sigurnost=0.6):
+def obdelaj_sliko(frame, sigurnost = 0.6):
+    """
+    obdelaj posamezen okvir (sliko) in vrni:
+    - označen okvir (annotated image)
+    - rezultate detekcije
+    """
     results = model(frame, verbose=False, conf=sigurnost)
-    result = results[0]
-    annotated = result.plot()
-    return annotated, result
+
+    annotated = results[0].plot()
+
+
+    return annotated, results[0], izracunaj_ovire(results[0])
+
 
 def izracunaj_ovire(results) -> 1 | 2 | 3:
     """
-    Preveri, ali je katerokoli detektirano polje (box) v srednjih 40% širine zaslona,
-    using OBB (Oriented Bounding Box) data.
-
-    Args:
-        results: Rezultati detekcije iz YOLO modela (results[0] iz obdelaj_sliko).
-
-    Returns:
-        True, če je vsaj eno polje v srednjih 40% širine zaslona, sicer False.
+    Vrne:
+    - 1: nič nevarnosti
+    - 2: objekt je v sredinskih 60% (x)
+    - 3: objekt je v sredini + spodnjih 20% (y)
     """
 
-    # check if 'obb' attribute exists and contains detections
-    # results.obb will be an OBB object, not directly a list
-    # t has properties like xywhr, conf, cls etc.
-    # we need to check if obb.xywhr is not None and has length.
     if not hasattr(results, 'obb') or results.obb is None or results.obb.xywhr is None or len(results.obb.xywhr) == 0:
-        return False
+        return 1
 
-    image_width = results.orig_shape[1]  # širina originalne slike
-    image_height = results.orig_shape[0]  # višina originalne slike
+    image_width = results.orig_shape[1]
+    image_height = results.orig_shape[0]
 
-    # določitev območja srednjih 40% -60%, PO DOMAČE JE NA SREDINI
-    left_boundary = image_width * 0.4
-    right_boundary = image_width * 0.6
+    left_boundary = image_width * 0.2
+    right_boundary = image_width * 0.8
+    bottom_threshold = image_height * 0.8
 
-    # določitev zgornje meje
-    top_boundary = image_height * 0.9
-
-    danger_level = 0
-
-    # rows of the xywhr tensor
-    # each row represents [x_center, y_center, width, height, angle] for one OBB
     for i, obb_data_row in enumerate(results.obb.xywhr):
-
-        current_class_id = results.obb.cls[i].item()
-
-        if current_class_id == PARKING_LINE_CLASS_ID:
+        cls_id = results.obb.cls[i].item()
+        if cls_id == PARKING_LINE_CLASS_ID:
             continue
 
-        x_center = obb_data_row[0].item()  # first element of the row, then .item()
-        y_center = obb_data_row[1].item()  # first element of the row, then .item()
+        x_center = obb_data_row[0].item()
+        y_center = obb_data_row[1].item()
+        width = obb_data_row[2].item()
+        height = obb_data_row[3].item()
 
-        print(x_center, y_center)
+        # estimate object bounds
+        x_min = x_center - width / 2
+        x_max = x_center + width / 2
+        y_bottom = y_center + height / 2  # bottom edge of the OBB
 
-        # preverimo, ali je center_x znotraj mej
-        if right_boundary >= x_center >= left_boundary:
-            if danger_level < 2:
-                danger_level = 2
+        # is in middle 60%?
+        if x_min < right_boundary and x_max > left_boundary:
+            if y_bottom >= bottom_threshold:
+                return 3
             else:
-                if y_center <= top_boundary:
-                    danger_level = 3
+                return 2
 
-
-    #print(danger_level)
-    return danger_level
+    return 1
 
 def izpisi_in_izlusci(result):
     oznake = []
