@@ -227,8 +227,8 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-json-logger==2.0.4
 pytz==2022.7.1
-pywin32==310
-pywinpty==2.0.15
+pywin32==310; sys_platform == "win32"
+pywinpty==2.0.15; sys_platform == "win32"
 PyYAML==6.0.2
 pyzmq==26.3.0
 redis==5.0.8
