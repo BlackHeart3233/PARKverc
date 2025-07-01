@@ -26,5 +26,7 @@ jobs:
           pip install --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 
       - name: Run unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest tests/
