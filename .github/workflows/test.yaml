@@ -1,4 +1,4 @@
-name: Run unit tests on Release branch
+name: Run unit tests on Release/Main/Develop branch
 
 on:
   push:
