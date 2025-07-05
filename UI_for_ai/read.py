@@ -256,16 +256,21 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             combined_frame = background_resized.copy()
             oznaka_podatki = {}
 
+            calculated_danger = 0
+
             if not value_switch:
                 annotated_frame_1, label_model = obdelaj_sliko_model_2(frame, 0.5)
                 annotated_frame_2, _ = obdelaj_sliko_model_2_1(frame, 0.5)
             else:
-                annotated_frame_1, result = obdelaj_sliko(frame, 0.5)
-                annotated_frame_2, _ = obdelaj_sliko(frame, 0.5)
-                oznaka_podatki = izpisi_in_izlusci(result)
+                annotated_frame_1, results, reported_danger, slika_z_poudarjenimi_crtami = obdelaj_sliko(frame, 0.5)
+                annotated_frame_1 = slika_z_poudarjenimi_crtami
+                calculated_danger = reported_danger
+
+                annotated_frame_2,_,_,_ = obdelaj_sliko(frame, 0.5)
+                oznaka_podatki = izpisi_in_izlusci(results)
 
             resized_frame_left = cv2.resize(annotated_frame_1, (video_width_1, video_height_1))
-            resized_frame_right = cv2.resize(annotated_frame_2, (video_width_1, video_height_1))
+            resized_frame_right = cv2.resize(annotated_frame_2, (video_width_2, video_height_2))
 
             combined_frame[
                 padding_top_bottom:padding_top_bottom + resized_frame_left.shape[0],
@@ -280,14 +285,13 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
 
             if value_switch:
                 # Inicializacija danger_level na neko privzeto vrednost, npr. 0
-                danger_level = 0  # ali pridobi iz rezultata obdelave, če to kasneje implementiraš
-                danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
+                danger_level = calculated_danger or 0
                 #print("danger lvl je: ", danger_level)
                 msg = messages_video2[danger_level]
                 #print("msg je: ", msg)
             else:
                 danger_level = 0  # tudi tu dodaš default, da ne pride do napake
-                danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
+                danger_level = calculated_danger or 0
 
                 important_label_found = None
                 for label in priority_order:
