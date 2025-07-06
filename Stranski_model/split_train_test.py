@@ -55,23 +55,20 @@ with open(yaml_path, "w", encoding="utf-8") as f:
 train: images/train
 val: images/val
 names:
-  0: Žoga                   
-  1: Kolo                   
-  2: Motorno_kolo            
-  3: Avtomobil               
-  4: Nakupovalni_vozicek     
-  5: Robnik                  
-  6: Človek               
-  7: Steber                  
-  8: Rampa                  
-  9: Prosto_parkirno_mesto   
-  10: Drevo                  
-  11: Prehod_za_pešce       
-  12: Električno_parkiranje 
-  13: Družinsko_parkiranje  
-  14: Invalidsko_parkiranje  
-  15: Prepovedano_parkiranje 
-  16: Zasebno_parkirišče     
+  0: Žoga
+  1: Kolo      
+  2: Motorno_kolo
+  3: Avtomobil
+  4: Voziček
+  5: Rampa
+  6: Človek
+  7: Steber
+  8: Prepovedano_parkiranje
+  9: Prosto_parkirno_mesto
+  10: Električno_parkiranje
+  11: Družinsko_parkiranje
+  12: Invalidsko_parkiranje
+  13: Zasebno_parkirisce  
 """)
 
 
