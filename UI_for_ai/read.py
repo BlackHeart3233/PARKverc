@@ -18,10 +18,23 @@ from model_1.model_odlocanja.model import obdelaj_sliko, izpisi_in_izlusci
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2
 from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
-video1_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
-video2_path =[]
+#video1_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
+#video2_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
 
-background_path = r'UI_for_ai/background.jpg'
+video1_path = [
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_004_25_4_2025.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_009_25_4_2025.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_005_25_4_2025.mp4"
+]
+
+video2_path = [
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4905.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4898.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4902.mp4"
+]
+
+
+background_path = r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\background_l.jpg"
 arial_path = 'UI_for_ai/ARIAL.TTF'
 ding_sound_path = 'UI_for_ai/ding.mp3'
 
@@ -93,7 +106,7 @@ def mouse_callback(event, x, y, flags, param):
 
 value_switch = False
 button_width = 200
-button_height = 50
+button_height = 47
 
 #----------------------------------------------------------------------
 def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom_point_left=None, bottom_point_right=None):
@@ -123,7 +136,7 @@ def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom
     if offset is None:
         offset = 0
 
-    max_offset = 300
+    max_offset = 150
     if offset > max_offset:
         offset = max_offset
     elif offset < -max_offset:
@@ -138,16 +151,14 @@ def bezier_quad(p0, p1, p2, t): #to je za one krivulje ko se izrisujejo
     p12 = (1 - t) * p1 + t * p2
     return (1 - t) * p01 + t * p12
 
-def draw_bezier_curve(frame, start, end, offset=0, color=(0, 255, 0), thickness=3):
-    control = np.round((start + end) / 2 + compute_flexible_control_offset(offset)).astype(int)
-    curve_points = []
-    for t in np.linspace(0, 1, num=100):
-        p = bezier_quad(start, control, end, t)
-        curve_points.append(p.astype(int))
-    curve_points = np.array(curve_points)
-
-    for i in range(len(curve_points) - 1):
-        cv2.line(frame, tuple(curve_points[i]), tuple(curve_points[i + 1]), color, thickness)
+def draw_bezier_curve(img, start, end, control, color=(255, 255, 255), thickness=2, num_points=100):
+    points = []
+    for t in np.linspace(0, 1, num_points):
+        x = int((1 - t)**2 * start[0] + 2 * (1 - t) * t * control[0] + t**2 * end[0])
+        y = int((1 - t)**2 * start[1] + 2 * (1 - t) * t * control[1] + t**2 * end[1])
+        points.append((x, y))
+    for i in range(len(points) - 1):
+        cv2.line(img, points[i], points[i + 1], color, thickness)
 
 def najdi_offset_po_y(oznaka_podatki):
     najvisja_y = float('inf')
@@ -172,16 +183,16 @@ def najdi_offset_po_y(oznaka_podatki):
 
 def compute_flexible_control_offset(offset, min_shift=100):
     if offset == 0:
-        return np.array([min_shift, 0])
-    
+        return np.array([0, 0])
+
     direction = -1 if offset > 0 else 1
     base_shift = max(abs(offset), min_shift)
-    
+
     nonlinear_shift = base_shift ** 1.5
-    
+
     max_shift = 200
     shift = min(nonlinear_shift, max_shift)
-    
+
     return np.array([direction * shift, 0])
 
 
@@ -192,9 +203,6 @@ global result
 def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
     ProcessedPic = 0
     global value_switch
-    current_offset = 0
-    step = 10
-    offset = 0
 
     for i in range(3):
         cap1 = cv2.VideoCapture(video1_path[i])
@@ -244,6 +252,9 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             "Invalidsko_parkiranje"
         ]
 
+        current_offset = 0
+
+
         while True:
             cap = cap2 if value_switch else cap1
             ret, frame = cap.read()
@@ -256,16 +267,21 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             combined_frame = background_resized.copy()
             oznaka_podatki = {}
 
+            calculated_danger = 0
+
             if not value_switch:
                 annotated_frame_1, label_model = obdelaj_sliko_model_2(frame, 0.5)
                 annotated_frame_2, _ = obdelaj_sliko_model_2_1(frame, 0.5)
             else:
-                annotated_frame_1, result = obdelaj_sliko(frame, 0.5)
-                annotated_frame_2, _ = obdelaj_sliko(frame, 0.5)
-                oznaka_podatki = izpisi_in_izlusci(result)
+                annotated_frame_1, results, reported_danger, slika_z_poudarjenimi_crtami = obdelaj_sliko(frame, 0.5)
+                annotated_frame_1 = slika_z_poudarjenimi_crtami
+                calculated_danger = reported_danger
+
+                annotated_frame_2,_,_,_ = obdelaj_sliko(frame, 0.5)
+                oznaka_podatki = izpisi_in_izlusci(results)
 
             resized_frame_left = cv2.resize(annotated_frame_1, (video_width_1, video_height_1))
-            resized_frame_right = cv2.resize(annotated_frame_2, (video_width_1, video_height_1))
+            resized_frame_right = cv2.resize(annotated_frame_2, (video_width_2, video_height_2))
 
             combined_frame[
                 padding_top_bottom:padding_top_bottom + resized_frame_left.shape[0],
@@ -280,14 +296,13 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
 
             if value_switch:
                 # Inicializacija danger_level na neko privzeto vrednost, npr. 0
-                danger_level = 0  # ali pridobi iz rezultata obdelave, če to kasneje implementiraš
-                danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
+                danger_level = calculated_danger or 0
                 #print("danger lvl je: ", danger_level)
                 msg = messages_video2[danger_level]
                 #print("msg je: ", msg)
             else:
                 danger_level = 0  # tudi tu dodaš default, da ne pride do napake
-                danger_level = int(np.clip(danger_level, 0, len(messages_video2) - 1))
+                danger_level = calculated_danger or 0
 
                 important_label_found = None
                 for label in priority_order:
@@ -308,7 +323,7 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
                 x=padding_left_right,
                 y=padding_top_bottom + resized_frame_left.shape[0] + 10,
                 width=resized_frame_left.shape[1],
-                height=50
+                height=40
             )
 
             button_x = (total_width - button_width) // 2
@@ -322,45 +337,35 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             text_y = button_y + (button_height + text_size[1]) // 2
             cv2.putText(combined_frame, text, (text_x, text_y), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
-
-
                     # ------ BEZIER KRIVULJE ------
             if value_switch:
                 if draw_curves:
                     width, height = total_width, total_height
-                    start1 = np.array([50, height - 50])
-                    end1 = np.array([350, 200])
-                    start2 = np.array([900, height - 50])
-                    end2 = np.array([600, 200])
-                    current_offset = 0  # Če imaš offset izračunan, ga tukaj uporabi
+                    start1 = np.array([50, height - 111])
+                    end1 = np.array([350, 300])
+                    start2 = np.array([900, height - 111])
+                    end2 = np.array([600, 300])
+                      # Če imaš offset izračunan, ga tukaj uporabi
                     step = 10
-                    
-                    if current_offset < offset:
-                        current_offset = min(current_offset + step, offset)
-                    elif current_offset > offset:
-                        current_offset = max(current_offset - step, offset)
-                    else:
-                        current_offset = offset
 
                     height, width = frame.shape[:2]
-                    offset = najdi_offset_iz_oznaka(oznaka_podatki, width, height)
-                    offset = offset
+                    new_offset = najdi_offset_iz_oznaka(oznaka_podatki, width, height)
 
-                    control1 = (start1 + end1) / 2 + compute_flexible_control_offset(current_offset)
-                    control2 = (start2 + end2) / 2 + compute_flexible_control_offset(current_offset)
-            
-                    if current_offset < offset:
-                        current_offset = min(current_offset + step, offset)
-                    elif current_offset > offset:
-                        current_offset = max(current_offset - step, offset)
 
-                    # Risanje krivulj s posodobljenim offsetom
-                    draw_bezier_curve(combined_frame, start1, end1, offset=current_offset, color=(0, 255, 0))
-                    draw_bezier_curve(combined_frame, start2, end2, offset=current_offset, color=(0, 0, 255))
+                    if current_offset < new_offset:
+                        current_offset = min(current_offset + step, new_offset)
+                    elif current_offset > new_offset:
+                        current_offset = max(current_offset - step, new_offset)
 
+                    control1 = np.round((start1 + end1) / 2 + np.array([-current_offset, 0])).astype(int)
+                    control2 = np.round((start2 + end2) / 2 + np.array([-current_offset, 0])).astype(int)
+
+                    draw_bezier_curve(combined_frame, start1, end1, control1, color=(255, 0, 0))
+                    draw_bezier_curve(combined_frame, start2, end2, control2, color=(0, 0, 255))
 
                     bottom_point_left = tuple(bezier_quad(start1, control1, end1, 0.0).astype(int))
                     bottom_point_right = tuple(bezier_quad(start2, control2, end2, 0.0).astype(int))
+
 
                     top_point_x = (bottom_point_left[0] + bottom_point_right[0]) // 2
                     top_point_y = int(height * 0.30)

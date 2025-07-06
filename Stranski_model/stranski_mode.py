@@ -2,16 +2,16 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 #import paho.mqtt.publish as publish
-'''
-def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/blob/main/weights/best.pt"):
+
+def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/resolve/main/stranski_model_04_06_2025_dodane_oznake/weights/best_test.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
     model = YOLO(url)
     return model
 '''
 def nalozi_model():
-    model = YOLO(r"./assets/Kjara/best_test.pt")
+    model = YOLO(r"../assets/Kjara/best_test.pt")
     return model
-
+'''
 from ultralytics import YOLO
 import cv2
 import os
@@ -22,27 +22,27 @@ TOPIC2 = "spo/prosto_parkirno_mesto"
 TOPIC3 = "spo/zasedeno_parkirno_mesto"
 
 can_park = cv2.resize(
-    cv2.imread("./assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread("../assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 family_car = cv2.resize(
-    cv2.imread("./assets/Kjara/signs/family_car.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread("../assets/Kjara/signs/family_car.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 electric_car = cv2.resize(
-    cv2.imread("./assets/Kjara/signs/electric_car.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread("../assets/Kjara/signs/electric_car.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 car= cv2.resize(
-    cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    cv2.imread("../assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
     (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 handicap_parking= cv2.resize(
-    cv2.imread("./assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    cv2.imread("../assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
     (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
