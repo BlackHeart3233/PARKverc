@@ -1,96 +1,95 @@
+
 import albumentations as A
 import matplotlib.pyplot as plt
 import numpy as np
 import random
 import os
+import shutil
 from pathlib import Path
+import argparse
 
-def transform(slika_path,savePath):
-    if not os.path.exists(slika_path):
-        print(f"Napaka: Datoteka ne obstaja: {slika_path}")
-        return
-
-    #(RGB, dtype=float32 ali uint8)
+def transform(slika_path: Path):
     image = plt.imread(slika_path)
-    filename = os.path.basename(slika_path)
-    #Če ima float vrednosti (0.0–1.0), pretvori v uint8 (0–255)
     if image.dtype != np.uint8:
         image = (image * 255).astype(np.uint8)
-    #alfa kanal (RGBA) -> odstrani
     if image.shape[-1] == 4:
         image = image[:, :, :3]
 
-    x = random.randint(0, 2)
-    if x == 0:
-        #Poudarjene črte
+    scenarij = random.randint(0, 2)
+    if scenarij == 0:
         transform = A.Compose([
-            A.CLAHE(clip_limit=8.0, tile_grid_size=(8, 8), p=1.0),  #izboljša kontrast
-            #clip_limit maksimalna vrednost za omejitev kontrasta (višja vrednost = bolj poudarjen kontrast)
-            #velikost mreže na katero se slika razdeli za lokalno izboljšavo kontrasta
-            A.Sharpen(alpha=(0.5, 1.0), lightness=(1.0, 1.5), p=1.0),  #izostrimo robove črt
-            #alpha = intenzivnost izostritve
-            #svetlost poudarjenih robov
-            A.RandomBrightnessContrast(brightness_limit=(0.2, 0.4), contrast_limit=(0.6, 1.0), p=1.0)  #povečamo svetlost in kontrast
+            A.CLAHE(clip_limit=8.0, tile_grid_size=(8, 8), p=1.0),
+            A.Sharpen(alpha=(0.5, 1.0), lightness=(1.0, 1.5), p=1.0),
+            A.RandomBrightnessContrast(brightness_limit=(0.2, 0.4),
+                                       contrast_limit=(0.6, 1.0), p=1.0)
         ])
-    elif x == 1:
-        #dodajanje dežja in meglice
+    elif scenarij == 1:
         transform = A.Compose([
-            A.RandomFog(p=1.0), #dodamo "fog" z vrjetnostjo 100%
-            A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.3, p=0.7), #povečamo svetlost in kontrast
-            # brightness_limit=0.15 lahko svetlost naraste ali pade do 15%.
-            # contrast_limit=0.3 lahko kontrast naraste ali pade do 30%.
-            # p=0.7 transformacija uporabi v 70% primerih.
-            A.GaussianBlur(blur_limit=(2, 5), p=0.2) #zamegljenost (blur)
-            #(2, 5) velikost zamegljevalnega jedra naključno izbrana med 2 in 5.
-            # p=0.5 uporabi v 20% primerih.
+            A.RandomFog(p=1.0),
+            A.RandomBrightnessContrast(brightness_limit=0.15,
+                                       contrast_limit=0.3, p=0.7),
+            A.GaussianBlur(blur_limit=(2, 5), p=0.2)
         ])
     else:
-        #tranformiramo na nizko kakovost kako bi recimo izgledala ob kompresiji
         transform = A.Compose([
             A.ImageCompression(quality_range=(10, 15), p=1.0),
-            #zelo nizka kakovost med 10 in 15 (100 = brez izgube)
-            # p=1.0 vrjetnost transformacije 100%
         ])
+    return transform(image=image)["image"]
 
+def procesiraj_slikovno_mapo(input_dir: Path): #augmentira vsako sliko 1× in shrani v <ime>_augmentirano"
+    output_dir = input_dir.parent / f"{input_dir.name}_augmentirano"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    for i in range(5):
-        transformed = transform(image=image)
-        transformed_image = transformed["image"]   # izhodna slika je shranjena pod ključem 'image'
-        #plt.figure()
-        #plt.imshow (transformed_image)
+    slikovne_pripone = {".jpg", ".jpeg", ".png"}
+    slikovne_datoteke = [p for p in input_dir.iterdir()
+                         if p.is_file() and p.suffix.lower() in slikovne_pripone]
 
+    if not slikovne_datoteke:
+        print(f"{input_dir}: brez slik preskočim.")
+        return
 
-    '''plt.figure(figsize=(12, 6))
-    plt.subplot(1, 2, 1)
-    plt.title('Originalna slika')
-    plt.imshow(image)
-    plt.axis('off')
+    for slika in slikovne_datoteke:
+        aug_slika = transform(slika)
+        plt.imsave(output_dir / slika.name, aug_slika)
 
-    plt.subplot(1, 2, 2)
-    plt.title('Poudarjene rumene črte')
-    plt.imshow(transformed_image)
-    plt.axis('off')
-    plt.show()'''
+    print(f"Augmentiral {len(slikovne_datoteke)} slik → {output_dir}")
 
-    return {'image': transformed_image}
-    #save_path = os.path.join(savePath, filename)
-    #plt.imsave(save_path, transformed_image)
+def kopiraj_label_mapo(label_dir: Path): #kopira celotno mapo lablov v <ime>_augmentirano"
+    output_dir = label_dir.parent / f"{label_dir.name}_augmentirano"
+    shutil.copytree(label_dir, output_dir, dirs_exist_ok=True)
+    print(f"Kopiral labele → {output_dir}")
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Augmentacija slik (1×) in kopiranje label map.")
+    parser.add_argument("--images_root", default="images",
+                        help="Koren mape s podmapami slik")
+    parser.add_argument("--labels_root", default="labels",
+                        help="Koren mape s podmapami label datotek")
+    args = parser.parse_args()
 
-def main(jpg_files, savePath):
-    for i in range(10):
-        chosenFile = random.choice(jpg_files)
-        agumenPic = transform(str(chosenFile), savePath)
-        save_path = os.path.join(savePath, chosenFile.name)
-        plt.imsave(save_path, agumenPic['image'])
-    print("Augmentacija je končana 😄😄")
+    images_root  = Path(args.images_root)
+    labels_root  = Path(args.labels_root)
 
+    if not images_root.is_dir():
+        raise SystemExit(f"Mapa {images_root} ne obstaja.")
+    if not labels_root.is_dir():
+        raise SystemExit(f"Mapa {labels_root} ne obstaja.")
 
-if __name__=="__main__":
-    inputPath = Path("images_from_video/Video_007_25_4_2025")
-    outputPath = "./augmented_images"
-    os.makedirs(outputPath, exist_ok=True)
-    jpg_files = [f for f in inputPath.iterdir()  #pogledamo koliko slik je v tej mapi
-             if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg']]
-    main(jpg_files, outputPath)
+    podmape_slik = [p for p in images_root.iterdir() if p.is_dir()]
+    if not podmape_slik:
+        raise SystemExit(f"Mapa {images_root} nima podmap.")
 
+    print(f"Najdene podmape slik: {[p.name for p in podmape_slik]}")
+
+    for img_dir in podmape_slik:
+        procesiraj_slikovno_mapo(img_dir)
+
+        lbl_dir = labels_root / img_dir.name
+        if lbl_dir.is_dir():
+            kopiraj_label_mapo(lbl_dir)
+        else:
+            print(f"Manjka label mapa za {img_dir.name} – preskoci.")
+
+if __name__ == "__main__":
+    main()
