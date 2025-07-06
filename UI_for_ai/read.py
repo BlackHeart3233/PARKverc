@@ -10,6 +10,7 @@ import albumentations as Aq
 
 BROKER = "10.0.0.1"
 TOPIC1 = "spo/procesirane_slike"
+global selected_option
 
 import sys
 import os
@@ -22,19 +23,23 @@ from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 #video2_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
 
 video1_path = [
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_004_25_4_2025.mp4",
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_009_25_4_2025.mp4",
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_005_25_4_2025.mp4"
+    "UI_for_ai/Video_004_25_4_2025.mp4",
+    "UI_for_ai/Video_009_25_4_2025.mp4",
+    "UI_for_ai/Video_005_25_4_2025.mp4"
 ]
 
 video2_path = [
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4905.mp4",
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4898.mp4",
-    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4902.mp4"
+    "UI_for_ai/IMG_4905.mp4",
+    "UI_for_ai/IMG_4898.mp4",
+    "UI_for_ai/IMG_4902.mp4"
 ]
 
+dropdown_options = ["Elektricno", "Druzinsko", "Invalidsko", "Navadno"]
+selected_option = dropdown_options[0]
+dropdown_open = False
 
-background_path = r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\background_l.jpg"
+
+background_path = r"UI_for_ai/background_l.jpg"
 arial_path = 'UI_for_ai/ARIAL.TTF'
 ding_sound_path = 'UI_for_ai/ding.mp3'
 
@@ -95,14 +100,37 @@ def play_sound_async(wav_file):
     threading.Thread(target=winsound.PlaySound, args=(wav_file, winsound.SND_FILENAME | winsound.SND_ASYNC), daemon=True).start()
 
 def mouse_callback(event, x, y, flags, param):
-    global value_switch
+    global value_switch, dropdown_open, selected_option
     total_width, total_height, padding_left_right, padding_top_bottom = param
     button_x = (total_width - button_width) // 2
-    button_y = total_height - padding_top_bottom + 10
+    button_y = total_height - padding_top_bottom - 10  # same as in main loop
+
     if event == cv2.EVENT_LBUTTONDOWN:
+        # Switch button
         if button_x <= x <= button_x + button_width and button_y <= y <= button_y + button_height:
             value_switch = not value_switch
-            #print(f"VALUE SWITCH toggled: {value_switch}")
+            dropdown_open = False
+
+        # Dropdown button location and logic when value_switch is False (like in drawing)
+        if not value_switch:
+            dropdown_x = button_x + 500
+            dropdown_y = button_y - 220
+            dropdown_width = 200
+            dropdown_height = 40
+
+            # Toggle dropdown
+            if dropdown_x <= x <= dropdown_x + dropdown_width and dropdown_y <= y <= dropdown_y + dropdown_height:
+                dropdown_open = not dropdown_open
+
+            # Selecting option
+            if dropdown_open:
+                for i, option in enumerate(dropdown_options):
+                    option_y = dropdown_y + (i + 1) * dropdown_height
+                    if dropdown_x <= x <= dropdown_x + dropdown_width and option_y <= y <= option_y + dropdown_height:
+                        selected_option = option
+                        dropdown_open = False
+
+
 
 value_switch = False
 button_width = 200
@@ -245,12 +273,26 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             "Invalidsko_parkiranje": 4
         }
 
-        priority_order = [
+        base_order = [
             "Prosto_parkirno_mesto",
             "Družinsko_parkiranje",
             "Električno_parkiranje",
             "Invalidsko_parkiranje"
         ]
+
+        option_map = {
+            "Elektricno": "Električno_parkiranje",
+            "Druzinsko": "Družinsko_parkiranje",
+            "Invalidsko": "Invalidsko_parkiranje",
+            "Navadno": "Prosto_parkirno_mesto"
+        }
+
+        selected_label = option_map.get(selected_option, "Prosto_parkirno_mesto")
+
+        priority_order = [selected_label] + [label for label in base_order if label != selected_label]
+
+        print("priority je: ",priority_order)
+
 
         current_offset = 0
 
@@ -294,6 +336,12 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
                 padding_left_right + resized_frame_left.shape[1] + padding_between + resized_frame_right.shape[1]
             ] = resized_frame_right
 
+            selected_label = option_map.get(selected_option, "Prosto_parkirno_mesto")
+            priority_order = [selected_label] + [label for label in base_order if label != selected_label]
+
+            print("priority je: ", priority_order)
+                
+
             if value_switch:
                 # Inicializacija danger_level na neko privzeto vrednost, npr. 0
                 danger_level = calculated_danger or 0
@@ -336,6 +384,32 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
             text_x = button_x + (button_width - text_size[0]) // 2
             text_y = button_y + (button_height + text_size[1]) // 2
             cv2.putText(combined_frame, text, (text_x, text_y), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+            if not value_switch:
+                dropdown_x = button_x + 500
+                dropdown_y = button_y - 220
+                dropdown_width = 200
+                dropdown_height = 40
+
+                # Draw the dropdown button
+                cv2.rectangle(combined_frame, (dropdown_x, dropdown_y),
+                            (dropdown_x + dropdown_width, dropdown_y + dropdown_height),
+                            (70, 70, 70), -1)
+                cv2.putText(combined_frame, selected_option,
+                            (dropdown_x + 10, dropdown_y + 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+                # If dropdown is open, draw options
+                if dropdown_open:
+                    for i, option in enumerate(dropdown_options):
+                        option_y = dropdown_y + (i + 1) * dropdown_height
+                        cv2.rectangle(combined_frame, (dropdown_x, option_y),
+                                    (dropdown_x + dropdown_width, option_y + dropdown_height),
+                                    (50, 50, 50), -1)
+                        cv2.putText(combined_frame, option,
+                                    (dropdown_x + 10, option_y + 30),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
 
                     # ------ BEZIER KRIVULJE ------
             if value_switch:
