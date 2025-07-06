@@ -291,8 +291,7 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
 
         priority_order = [selected_label] + [label for label in base_order if label != selected_label]
 
-        print("priority je: ",priority_order)
-
+        print("Priority: ",priority_order)
 
         current_offset = 0
 
@@ -338,8 +337,8 @@ def play_videos_with_switch(video1_path, video2_path, draw_curves=False):
 
             selected_label = option_map.get(selected_option, "Prosto_parkirno_mesto")
             priority_order = [selected_label] + [label for label in base_order if label != selected_label]
+            print("Priority: ",priority_order)
 
-            print("priority je: ", priority_order)
                 
 
             if value_switch:

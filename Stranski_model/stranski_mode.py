@@ -42,7 +42,7 @@ car= cv2.resize(
     interpolation=cv2.INTER_AREA
 )
 handicap_parking= cv2.resize(
-    cv2.imread("assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    cv2.imread("assets/Kjara/signs/handicap.png", cv2.IMREAD_UNCHANGED),
     (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
@@ -68,6 +68,7 @@ def izpisi_obb_info(result, model):
 
 
 model = nalozi_model()
+print("Model labels: ", model.names)
 
 def obdelaj_sliko_model_2_1(frame, sigurnost = 0.6):
     """
@@ -147,7 +148,7 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     #publish.single(TOPIC2, str(free_parking), hostname=BROKER)
     #publish.single(TOPIC3, str(occupied_parking),hostname=BROKER)
 
-
+    print("Labels: ",labels)
     return annotated, labels  # vrni seznam vseh labelov
 
 
