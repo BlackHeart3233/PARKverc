@@ -1,7 +1,7 @@
 import cv2
 import argparse
 from ultralytics import YOLO
-
+from model_1.model_odlocanja.model import obdelaj_sliko, izpisi_in_izlusci
 
 """
 Argumenti:
@@ -17,9 +17,6 @@ parser.add_argument('--source',
                     help="Input source: 'webcam' or path to video file")
 
 args = parser.parse_args()
-
-
-model = YOLO("runs/detect/train/weights/best.pt")
 
 
 if args.source == 'webcam':
@@ -42,8 +39,7 @@ while True:
     if not ret:
         break
 
-    results = model(frame, verbose=False)
-    annotated_frame = results[0].plot()
+    annotated_frame, results, reported_danger, slika_z_poudarjenimi_crtami = obdelaj_sliko(frame, 0.5)
 
     cv2.imshow("YOLOv8 Detection", annotated_frame)
 
