@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 #import paho.mqtt.publish as publish
 
-def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/resolve/main/stranski_model_augmentiran_100_epoch/weights/last.pt"):
+def nalozi_model(url: str = "https://huggingface.co/ParkVerc/model_stranski/resolve/main/stranski_model_augmentiran/weights/last.pt"):
     """naloži YOLOv8 model iz podane poti ali URL-ja."""
     model = YOLO(url)
     return model
@@ -148,7 +148,7 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     #publish.single(TOPIC2, str(free_parking), hostname=BROKER)
     #publish.single(TOPIC3, str(occupied_parking),hostname=BROKER)
 
-    #print("Labels: ",labels)
+    print("Labels: ",labels)
     return annotated, labels  # vrni seznam vseh labelov
 
 
