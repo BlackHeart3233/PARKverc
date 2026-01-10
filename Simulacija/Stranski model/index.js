@@ -23,6 +23,16 @@ let otherObjects = [];
 let parkingSpaces = [];
 let parkedCars = [];
 
+// luči
+let sunLight = null;
+let ambientLight = null;
+let headlightGroup = null;
+let hemiLight = null;
+let envRT = null;
+let envCam = null;
+let moon = null;
+let isDarkMode = false;
+
 init();
 animate();
 
@@ -54,19 +64,17 @@ function init() {
     controls.target.set(0, 0, 0);
     controls.update();
 
-    // LUČ
-    // ambientna
-    scene.add(new THREE.AmbientLight(0xffffff, 0.2));
-    // direkcijska
-    const light = new THREE.DirectionalLight(0xffffff, 0.5);
-    light.castShadow = true;
-    light.position.set(-100, 100, 0);
-    scene.add(light);
+    const hemi = new THREE.HemisphereLight(
+        0x3a5fa0,  // sky blue
+        0x0a0a0a,  // ground
+        0.45       // stronger bounce
+    );
+    scene.add(hemi);
 
     // TLA
     ground = new THREE.Mesh(
         new THREE.BoxGeometry(100, 1, 1000),
-        new THREE.MeshLambertMaterial({ color: 0xffaaaa })
+        new THREE.MeshLambertMaterial({ color: 0x444444 })
     );
     ground.castShadow = true;
     ground.receiveShadow = true;
@@ -82,6 +90,8 @@ function init() {
         car = cloneObject(carTemplate);
         car.position.set(0, 0, 0);
         scene.add(car);
+
+        addHeadlightsToCar(car);
     });
 
     // pred-naložimo parkirno mesto
@@ -98,6 +108,12 @@ function init() {
     preloadModel("objects-models/x.mtl", "objects-models/steber.obj", (obj) => {
         wallTemplate = obj;
     });
+
+    lightMode();
+
+    if (envCam) {
+        envCam.update(renderer, scene);
+    }
 
     window.addEventListener('resize', onWindowResize);
 }
@@ -263,3 +279,171 @@ function onWindowResize() {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
+
+function addHeadlightsToCar(car) {
+    if (headlightGroup) car.remove(headlightGroup);
+
+    headlightGroup = new THREE.Group();
+
+    const mk = () => new THREE.SpotLight(
+      0xffffff,
+      250,        // intensity
+      200,          // distance: 0 = infinite
+      1.5,  // angle: wide cone
+      1.6,        // penumbra
+      1           // decay: less falloff
+    );
+
+    const leftLight = mk();
+    const rightLight = mk();
+
+    leftLight.position.set(4, 1.0, -2);
+    rightLight.position.set(4, 1.0, 2);
+
+    const leftTarget = new THREE.Object3D();
+    const rightTarget = new THREE.Object3D();
+
+    car.add(leftTarget);
+    car.add(rightTarget);
+
+    leftTarget.position.set(40, 0.6, 0.9);
+    rightTarget.position.set(40, 0.6, -0.9);
+
+    leftLight.target = leftTarget;
+    rightLight.target = rightTarget;
+
+    headlightGroup.add(leftLight);
+    headlightGroup.add(rightLight);
+
+    const bulbGeo = new THREE.SphereGeometry(0.08, 12, 12);
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const bulbL = new THREE.Mesh(bulbGeo, bulbMat);
+    const bulbR = new THREE.Mesh(bulbGeo, bulbMat);
+    bulbL.position.copy(leftLight.position);
+    bulbR.position.copy(rightLight.position);
+    headlightGroup.add(bulbL, bulbR);
+
+    car.add(headlightGroup);
+
+    // DEBUGGIRANJE
+    /*const leftHelper = new THREE.SpotLightHelper(leftLight);
+    const rightHelper = new THREE.SpotLightHelper(rightLight);
+    scene.add(leftHelper, rightHelper);
+    leftLight.userData.helper = leftHelper;
+    rightLight.userData.helper = rightHelper;*/
+}
+
+function darkMode() {
+    scene.background = new THREE.Color(0x0b1d3a);
+
+    ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+    scene.add(ambientLight);
+
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    sunLight = new THREE.DirectionalLight(0xaecbff, 0.45);
+    sunLight.castShadow = true;
+    sunLight.position.set(-50, 80, -50);
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.radius = 4;
+    sunLight.shadow.bias = -0.0002;
+    scene.add(sunLight);
+
+    scene.background = new THREE.Color(0x0b1d3a);
+
+    hemiLight = new THREE.HemisphereLight(
+        0x3a5fa0,
+        0x0a0a0a,
+        0.45
+    );
+    scene.add(hemiLight);
+
+    envRT = new THREE.WebGLCubeRenderTarget(128);
+    envCam = new THREE.CubeCamera(0.1, 1000, envRT);
+    scene.add(envCam);
+
+    scene.environment = envRT.texture;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.5;
+
+    const moonGeo = new THREE.SphereGeometry(6, 32, 32);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xdde6ff });
+    moonMat.color.set(0xffffff);
+    moonMat.transparent = true;
+    moonMat.opacity = 0.9;
+
+    moon = new THREE.Mesh(moonGeo, moonMat);
+    moon.position.copy(sunLight.position).normalize().multiplyScalar(400);
+    scene.add(moon);
+
+    scene.fog = new THREE.FogExp2(0x0b1d3a, 0.006);
+}
+
+function lightMode() {
+    scene.background = new THREE.Color(0xbfd7ff); // light sky-ish
+
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+    scene.add(ambientLight);
+
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+
+    sunLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    sunLight.castShadow = true;
+    sunLight.position.set(-100, 100, 0);
+    scene.add(sunLight);
+
+    hemiLight = new THREE.HemisphereLight(0xffffff, 0xdddddd, 0.25);
+    scene.add(hemiLight);
+
+    envRT = new THREE.WebGLCubeRenderTarget(128);
+    envCam = new THREE.CubeCamera(0.1, 1000, envRT);
+    scene.add(envCam);
+    scene.environment = envRT.texture;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+
+    if (moon) {
+        scene.remove(moon);
+        moon = null;
+    }
+    scene.fog = null;
+}
+
+function toggleMode() {
+    clearLighting();
+
+    if (isDarkMode) {
+        lightMode();
+    } else {
+        darkMode();
+    }
+
+    isDarkMode = !isDarkMode;
+
+    if (envCam) {
+        envCam.update(renderer, scene);
+    }
+}
+
+function clearLighting() {
+    if (ambientLight) scene.remove(ambientLight);
+    if (sunLight) scene.remove(sunLight);
+    if (hemiLight) scene.remove(hemiLight);
+    if (moon) scene.remove(moon);
+
+    ambientLight = null;
+    sunLight = null;
+    hemiLight = null;
+    moon = null;
+
+    scene.fog = null;
+}
+
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'o' || e.key === 'O') {
+        toggleMode();
+    }
+});
