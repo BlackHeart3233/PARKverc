@@ -22,27 +22,27 @@ TOPIC2 = "spo/prosto_parkirno_mesto"
 TOPIC3 = "spo/zasedeno_parkirno_mesto"
 
 can_park = cv2.resize(
-    cv2.imread("assets/Kjara/signs/can_park.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread(r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\signs\can_park.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 family_car = cv2.resize(
-    cv2.imread("assets/Kjara/signs/family_car.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread(r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\signs\family_car.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih 
     interpolation=cv2.INTER_AREA
 )
 electric_car = cv2.resize(
-    cv2.imread("assets/Kjara/signs/electric_car.jpg", cv2.IMREAD_UNCHANGED),
+    cv2.imread(r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\signs\electric_car.jpg", cv2.IMREAD_UNCHANGED),
     (125, 125),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 car= cv2.resize(
-    cv2.imread("assets/Kjara/signs/car.webp", cv2.IMREAD_UNCHANGED),
+    cv2.imread(r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\signs\car.webp", cv2.IMREAD_UNCHANGED),
     (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
 handicap_parking= cv2.resize(
-    cv2.imread("assets/Kjara/signs/handicap.png", cv2.IMREAD_UNCHANGED),
+    cv2.imread(r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\signs\handicap.png", cv2.IMREAD_UNCHANGED),
     (80, 80),  #širina, višina v pikslih
     interpolation=cv2.INTER_AREA
 )
@@ -151,10 +151,9 @@ def obdelaj_sliko_model_2(frame, sigurnost=0.6):
     print("Labels: ",labels)
     return annotated, labels  # vrni seznam vseh labelov
 
-
 # 🔽 TESTNA FUNKCIJA
 if __name__ == "__main__":
-    pot_do_slike = "./assets/Kjara/images_from_video/Video_009_25_4_2025/frame_155.jpg"
+    pot_do_slike = r"C:\Users\nejla\Desktop\PARKverc\assets\Kjara\images_from_video\Video_009_25_4_2025/frame_155.jpg"
 
     if not os.path.exists(pot_do_slike):
         print(f" Napaka: Pot do slike ne obstaja -> {pot_do_slike}")

@@ -126,9 +126,11 @@ def izpisi_in_izlusci(result):
 
     return oznake
 
+
 def narisi_parking_boxes(result, image):
     """
-    Nariše zelene rotirane okvirje okoli parkirnih črt (class_id == 7).
+    Nariše zelene rotirane okvirje okoli parkirnih črt (class_id == 7)
+    in izpiše njihove koordinate v terminal.
 
     Args:
         result: YOLOv8 rezultat (results[0])
@@ -151,10 +153,18 @@ def narisi_parking_boxes(result, image):
         height = obb_data_row[3].item()
         angle = obb_data_row[4].item()
 
+        # Rotirani bounding box
         box = ((x_center, y_center), (width, height), angle * 180 / np.pi)
         box_pts = cv2.boxPoints(box)
         box_pts = np.intp(box_pts)
 
+        # Nariši na sliko
         cv2.drawContours(image, [box_pts], 0, (0, 255, 0), 2)
+
+        # Izpiši koordinate v terminal
+        coords_list = box_pts.tolist()
+        print(
+            f"Parking črta {i}: center=({x_center:.1f},{y_center:.1f}), width={width:.1f}, height={height:.1f}, angle={angle * 180 / np.pi:.1f}°")
+        print(f"  Točke: {coords_list}")
 
     return image

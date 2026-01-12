@@ -21,27 +21,27 @@ from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 
 #video1_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
 #video2_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
-
 video1_path = [
-    "UI_for_ai/Video_004_25_4_2025.mp4",
-    "UI_for_ai/Video_009_25_4_2025.mp4",
-    "UI_for_ai/Video_005_25_4_2025.mp4"
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\test_video_1"
+    r".mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_004_25_4_2025.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_009_25_4_2025.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\Video_005_25_4_2025.mp4"
 ]
 
 video2_path = [
-    "UI_for_ai/IMG_4905.mp4",
-    "UI_for_ai/IMG_4898.mp4",
-    "UI_for_ai/IMG_4902.mp4"
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4905.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4898.mp4",
+    r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\IMG_4902.mp4"
 ]
-
 dropdown_options = ["Elektricno", "Druzinsko", "Invalidsko", "Navadno"]
 selected_option = dropdown_options[0]
 dropdown_open = False
 
 
-background_path = r"UI_for_ai/background_l.jpg"
-arial_path = 'UI_for_ai/ARIAL.TTF'
-ding_sound_path = 'UI_for_ai/ding.mp3'
+background_path = r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\background_l.jpg"
+arial_path = r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\ARIAL.TTF"
+ding_sound_path = r"C:\Users\nejla\Desktop\PARKverc\UI_for_ai\ding.mp3"
 
 PADDING_LEFT = 20
 PADDING_TOP_BOTTOM = 20
