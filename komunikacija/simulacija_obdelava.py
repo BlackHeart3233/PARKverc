@@ -2,16 +2,15 @@ from ultralytics import YOLO
 import cv2
 from typing import Union
 from fastapi import FastAPI, Request, Response
-import kompresija_FLOCIC
 import numpy as np
 from PIL import Image
-import dekompresija__FLOCIC as dekompresija
 import os
 import time
 from bitstring import BitArray
 import threading
 import cv2
 import numpy as np
+import compressor
 
 #_dummy = np.zeros((8,8), np.int32)
 #kompresija_FLOCIC.kompresija(_dummy)
@@ -27,14 +26,15 @@ PARKING_LINE_CLASS_ID = 7
 @app.post("/obdelaj_sliko")
 async def obdelaj_sliko(request: Request):
     data = {"lines": []}
-    img_bytes = await request.body()
-    if not img_bytes:
-        return data
-    B = BitArray(img_bytes)
-    gray = dekompresija.Decompress(B)
-    if gray is None:
-        print("DECOMPRESS ERROR:")
-        return data
+    compressed = await request.body()
+    if not compressed:
+        return JSONResponse({"error": "empty body"})
+    try:
+        gray = compressor.decompress(compressed)
+        gray = np.asarray(gray, dtype=np.uint8)
+    except Exception as e:
+        print("DECOMPRESS ERROR:", e)
+        return JSONResponse({"error": "decompress failed"})
     img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     os.makedirs("debug", exist_ok=True)
     filename = f"debug/debug_{int(time.time()*1000)}.png"
@@ -46,7 +46,6 @@ async def obdelaj_sliko(request: Request):
         cls_id = result.obb.cls[i].item()
         if cls_id != 7:
             continue  # samo za parkirne črte
-
         x_center = obb_data_row[0].item()
         y_center = obb_data_row[1].item()
         width = obb_data_row[2].item()
@@ -71,21 +70,13 @@ async def obdelaj_sliko(request: Request):
 @app.post("/kompresija")
 async def kompresija(request: Request):
     raw = await request.body()
-    img = cv2.imdecode(
-        np.frombuffer(raw, np.uint8),
-        cv2.IMREAD_GRAYSCALE
-    )
+    arr = np.frombuffer(raw, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        raise ValueError("cv2.imdecode failed")
-
-    height, width = img.shape
-    img = np.ascontiguousarray(img)
-    P = img.flatten(order="C")  # uint8
-
-
-    B = kompresija_FLOCIC.kompresija(P)
+        return {"error": "Invalid image"}
+    compressed = compressor.compress(img)
     return Response(
-        content=B.tobytes(),
+        content=compressed.tobytes(),
         media_type="application/octet-stream"
     )
 

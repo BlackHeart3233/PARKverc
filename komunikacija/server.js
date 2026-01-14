@@ -1,56 +1,95 @@
-import WebSocket from 'ws';
-import { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from "ws";
 
-//zagon node server.js
+// Node 18+ (ti imaš 24) → fetch je GLOBAL
+// ❌ NE uvažaj node-fetch
+
 const wss = new WebSocketServer({ port: 8080 });
 
-let sensorSockets,webSockets;
+let sensorSocket = null;
+let webSocket = null;
 
-wss.on('connection', socket => {
+console.log("WebSocket server teče na ws://localhost:8080");
 
-    socket.on('message', async (message) => {
+wss.on("connection", socket => {
+
+    console.log("Client povezan");
+    socket.on("message", async (message) => {
         try {
             const text = message.toString();
-            const [command, payload] = text.split(" ", 2);
-
-            switch (command) {
-                case "WEB":
-                    webSockets = socket;
-                    console.log('webSockets povezan');
+            let obj;
+            try {
+                obj = JSON.parse(text);
+            } catch {
+                if (text === "WEB") {
+                    webSocket = socket;
+                    console.log("WEB povezan");
                     return;
-                case "SENZOR":
-                    sensorSockets = socket;
-                    console.log('sensor povezan');
+                }
+
+                if (text === "SENZOR") {
+                    sensorSocket = socket;
+                    console.log("SENZOR povezan");
                     return;
-                case "KAMERA:":
-                    const compressedBuffer = Buffer.from(message);
-                    const res = await fetch("http://localhost:5000/obdelaj_sliko", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/octet-stream" },
-                        body: compressedBuffer
-                    });
-                    const json = await res.json();
-                    console.log(JSON.stringify(json, null, 2))
-                    if (!webSockets || webSockets.readyState !== WebSocket.OPEN) {
-                            console.log("WEB ni povezan - preskakujem");
-                            return;
-                        }
-                    webSockets.send(JSON.stringify({json}));
-
-
-                    break;
-                default:
-                    socket.send("Neznan ukaz");
+                }
+                console.log("Neznan tekst:", text);
+                return;
             }
-            socket.on("close", () => {
-                if (socket === webSockets) webSockets = null;
-                if (socket === sensorSockets) sensorSockets = null;
-                console.log("Client odklopljen");
-            });
+
+            if (obj.type === "KAMERA") {
+                if (!obj.data) {
+                    console.log("KAMERA brez data");
+                    return;
+                }
+                const compressedBuffer = Buffer.from(obj.data, "base64");
+
+                console.log(
+                    "Prejet KAMERA frame:",
+                    compressedBuffer.length,
+                    "bytes"
+                );
+                const res = await fetch("http://localhost:5000/obdelaj_sliko", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/octet-stream"
+                    },
+                    body: compressedBuffer
+                });
+
+                let result;
+                try {
+                    result = await res.json();
+                } catch {
+                    result = {
+                        error: "FastAPI ni vrnil JSON",
+                        status: res.status
+                    };
+                }
+
+                if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                    webSocket.send(result);
+                } else {
+                    console.log("WEB ni povezan");
+                    console.log("RESULT:", JSON.stringify(result, null, 2));
+                }
+
+                return;
+            }
+
+            console.log("Neznan JSON:", obj);
 
         } catch (err) {
-            console.error(err);
-            socket.send("Napaka pri obdelavi");
+            console.error("Napaka WS message:", err);
+        }
+    });
+
+    socket.on("close", () => {
+        if (socket === webSocket) {
+            webSocket = null;
+            console.log("WEB odklopljen");
+        }
+        if (socket === sensorSocket) {
+            sensorSocket = null;
+            console.log("SENZOR odklopljen");
         }
     });
 });
