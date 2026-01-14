@@ -57,25 +57,128 @@ static void MX_GPIO_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+typedef enum
+{
+    DATA_DISTANCE,
+    DATA_ROTARY
+} DataType_t;
+
+typedef struct
+{
+    DataType_t type; //pove ali gre za razdaljo ali rotacijo
+    int32_t value; //vrednost senzorja
+} TxMessage_t;
+
+typedef struct
+{
+    int32_t target_position;   //želeni položaj motorja
+    int32_t speed;             //hitrost motorja
+} StepperCmd_t;
+
+QueueHandle_t Queue_Tx;
+Queue_Tx = xQueueCreate(
+            10,                 //dolžina vrste
+            sizeof(TxMessage_t) //velikost elementa
+          );
+
+
+QueueHandle_t Queue_CMD_from_PC;
+
+Queue_CMD_from_PC = xQueueCreate(
+                        5,
+                        sizeof(StepperCmd_t)
+                    );
+
 void Task_Distance (void *argument) {
+    TxMessage_t msg;
+
+    for (;;)
+    {
+        msg.type  = DATA_DISTANCE;
+        msg.value = 250; // mock razdalja v mm
+
+        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
 }
 
 void Task_RotarySensor  (void *argument) {
+    TxMessage_t msg;
+
+    for (;;)
+    {
+        msg.type  = DATA_ROTARY;
+        msg.value = 90; // mock rotacija v stopinjah
+
+        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
 
 }
 
-void Task_StepperControl (void *argument) {
+void Task_StepperControl(void *pvParameters)
+{
+    StepperCmd_t receivedCmd;
+
+    for (;;)
+    {
+        if (xQueueReceive(Queue_CMD_from_PC,
+                          &receivedCmd,
+                          portMAX_DELAY) == pdPASS)
+        {
+            //MOCK obdelava ukaza
+            //krmiljenje NEMA17
+        }
+    }
+}
+
+
+void Task_Tx(void *pvParameters){
+	    TxMessage_t rxMsg;
+
+	    for (;;)
+	    {
+	        if (xQueueReceive(Queue_Tx, &rxMsg, portMAX_DELAY) == pdPASS)
+	        {
+	            switch (rxMsg.type)
+	            {
+	                case DATA_DISTANCE:
+	                    //pošlji razdaljo na pc
+	                    break;
+
+	                case DATA_ROTARY:
+	                    //poslji rotacijo na PC
+	                    break;
+	            }
+	        }
+	    }
+	}
+
 
 }
 
-void Task_Tx  (void *argument) {
+void Task_Rx(void *pvParameters)
+	{
+	    StepperCmd_t cmd;
 
-}
+	    for (;;)
+	    {
+	    	//kle je treba dodat pravilno branje iz CDC
+	        cmd.target_position=180;  //stopinje ali koraki
+	        cmd.speed=200;  //hitrost
+	        xQueueSend(Queue_CMD_from_PC, &cmd, portMAX_DELAY);
+	        vTaskDelay(pdMS_TO_TICKS(3000));
+	    }
+	}
 
-void Task_Rx   (void *argument) {
 
-}
+
+
+
+
 
 
 
