@@ -23,15 +23,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "main.h"
-#include "FreeRTOS.h"
-#include "queue.h"
-#include "task.h"
-#include "usb_device.h"
 #include "distance.h"
 #include "usbd_cdc_if.h"
 #include <stdio.h>
 #include <string.h>
+#include "queue.h"
 
 /* USER CODE END Includes */
 
@@ -61,6 +57,12 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
+
+
+osThreadId_t distanceTaskHandle;
+osThreadId_t txTaskHandle;
+QueueHandle_t distanceQueue;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,33 +77,9 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-typedef enum
-{
-    DATA_DISTANCE,
-    DATA_ROTARY
-} DataType_t;
-
-typedef struct
-{
-    DataType_t type; //pove ali gre za razdaljo ali rotacijo
-    float value; //vrednost senzorja
-} TxMessage_t;
-
-typedef struct
-{
-    int32_t target_position;   //želeni položaj motorja
-    int32_t speed;             //hitrost motorja
-} StepperCmd_t;
-
-QueueHandle_t Queue_Tx;
-QueueHandle_t Queue_CMD_from_PC;
-
-
-/*void Task_Distance(void *argument)
+void Task_Distance(void *argument)
 {
     HCSR04_SetNotifyTaskHandle(xTaskGetCurrentTaskHandle());
-    TxMessage_t msg;
 
     for (;;)
     {
@@ -109,114 +87,64 @@ QueueHandle_t Queue_CMD_from_PC;
 
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(30)) > 0)
         {
-            msg.type  = DATA_DISTANCE;
-            msg.value = HCSR04_GetDistanceCm();//
-            xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
+            float dist = HCSR04_GetDistanceCm();
+
+            xQueueOverwrite(distanceQueue, &dist);
         }
 
         vTaskDelay(pdMS_TO_TICKS(60));
     }
-}*/
-
-
-//MOCK distance
-void Task_Distance(void *argument)
-{
-    TxMessage_t msg;
-    float mockDistance = 20.0f;   // začetna mock razdalja (cm)
-
-    for (;;)
-    {
-        msg.type  = DATA_DISTANCE;
-        msg.value = mockDistance;
-
-        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
-
-        // simulacija spreminjanja razdalje
-        mockDistance += 1.5f;
-        if (mockDistance > 50.0f)
-        {
-            mockDistance = 20.0f;
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(500)); // perioda "meritve"
-    }
 }
-
 
 
 void Task_RotarySensor  (void *argument) {
-    TxMessage_t msg;
-
-    for (;;)
-    {
-        msg.type  = DATA_ROTARY;
-        msg.value = 90; // mock rotacija v stopinjah
-
-        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
-
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
 
 }
 
-void Task_StepperControl(void *pvParameters)
-{
-    StepperCmd_t receivedCmd;
+void Task_StepperControl (void *argument) {
 
-    for (;;)
-    {
-        if (xQueueReceive(Queue_CMD_from_PC,
-                          &receivedCmd,
-                          portMAX_DELAY) == pdPASS)
-        {
-            //MOCK obdelava ukaza
-            //krmiljenje NEMA17
-        }
-    }
 }
 
-
-void Task_Tx(void *pvParameters)
+void Task_Tx(void *argument)
 {
-    TxMessage_t rxMsg;
-    char txBuf[64];
+    float dist;
+    char msg[32];
 
     for (;;)
     {
-        if (xQueueReceive(Queue_Tx, &rxMsg, portMAX_DELAY) == pdPASS)
+        if (xQueueReceive(distanceQueue, &dist, portMAX_DELAY) == pdTRUE)
         {
-            int len = snprintf(txBuf, sizeof(txBuf),
-                               "%s: %.2f\r\n",
-                               rxMsg.type == DATA_DISTANCE ? "DIST" : "ROT",
-                               rxMsg.value);
+            int len = snprintf(msg, sizeof(msg), "%.2f\r\n", dist);
 
-            while (CDC_Transmit_FS((uint8_t*)txBuf, len) == USBD_BUSY)
+            if (len > 0)
             {
-                vTaskDelay(pdMS_TO_TICKS(2));
+                while (CDC_Transmit_FS((uint8_t *)msg, len) == USBD_BUSY)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(2));
+                }
             }
+
+            vTaskDelay(pdMS_TO_TICKS(20));
         }
     }
 }
 
+void Task_Rx   (void *argument) {
 
-void Task_Rx(void *pvParameters)
-	{
-	    StepperCmd_t cmd;
-
-	    for (;;)
-	    {
-	    	//kle je treba dodat pravilno branje iz CDC
-	        cmd.target_position=180;  //stopinje ali koraki
-	        cmd.speed=200;  //hitrost
-	        xQueueSend(Queue_CMD_from_PC, &cmd, portMAX_DELAY);
-	        vTaskDelay(pdMS_TO_TICKS(3000));
-	    }
-	}
+}
 
 
+const osThreadAttr_t distanceTask_attributes = {
+  .name = "DistanceTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
-
+const osThreadAttr_t txTask_attributes = {
+  .name = "TxTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
 
 /* USER CODE END 0 */
 
@@ -228,14 +156,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
-	HAL_Init();
-
-	Queue_Tx = xQueueCreate(10, sizeof(TxMessage_t));
-	Queue_CMD_from_PC = xQueueCreate(5, sizeof(StepperCmd_t));
-
-	configASSERT(Queue_Tx != NULL);
-	configASSERT(Queue_CMD_from_PC != NULL);
 
   /* USER CODE END 1 */
 
@@ -261,14 +181,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HCSR04_Init(&htim5);
-  xTaskCreate(Task_Distance, "DistanceTask", 256 * 4, NULL, 1, NULL);
-  xTaskCreate(Task_RotarySensor, "Task RotarySensor", 1024, NULL, 1, NULL);
-  xTaskCreate(Task_StepperControl, "Task StepperControl", 1024, NULL, 2, NULL);
-  xTaskCreate(Task_Tx, "TxTask", 512 * 4, NULL, 1, NULL);
-  xTaskCreate(Task_Rx, "RxTask", 512 * 4, NULL, 3, NULL);
-   // Zaženemo scheduler
-  MX_USB_DEVICE_Init();
-   vTaskStartScheduler();
 
   /* USER CODE END 2 */
 
@@ -336,10 +248,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 16;
   RCC_OscInitStruct.PLL.PLLN = 192;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
@@ -478,15 +391,21 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
+
+  distanceQueue = xQueueCreate(1, sizeof(float));
+  configASSERT(distanceQueue != NULL);
+
+  distanceTaskHandle = osThreadNew(Task_Distance, NULL, &distanceTask_attributes);
+  configASSERT(distanceTaskHandle != NULL);
+
+  txTaskHandle = osThreadNew(Task_Tx, NULL, &txTask_attributes);
+  configASSERT(txTaskHandle != NULL);
+
+  for (;;)
   {
-    osDelay(1);
+    osDelay(1000);
   }
-  /* USER CODE END 5 */
 }
 
 /**

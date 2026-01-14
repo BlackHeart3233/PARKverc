@@ -11,7 +11,7 @@ try:
     while True:
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if line:
-            print(f"Vracam: {line}")
+            print(f"razdalja: {line}")
 except KeyboardInterrupt:
     print("\nprekinjam...")
 finally:
