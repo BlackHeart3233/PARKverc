@@ -1,0 +1,19 @@
+{
+  "name": "komunikacija",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "client.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "image-size": "^2.0.2",
+    "sharp": "^0.34.5",
+    "ws": "^8.19.0"
+  }
+}
