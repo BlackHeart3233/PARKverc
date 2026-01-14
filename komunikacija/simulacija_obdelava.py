@@ -75,12 +75,14 @@ async def kompresija(request: Request):
         np.frombuffer(raw, np.uint8),
         cv2.IMREAD_GRAYSCALE
     )
-
     if img is None:
         raise ValueError("cv2.imdecode failed")
 
     height, width = img.shape
-    P = img.astype(np.int32)
+    img = np.ascontiguousarray(img)
+    P = img.flatten(order="C")  # uint8
+
+
     B = kompresija_FLOCIC.kompresija(P)
     return Response(
         content=B.tobytes(),
