@@ -77,6 +77,31 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+typedef enum
+{
+    DATA_DISTANCE,
+    DATA_ROTARY
+} DataType_t;
+
+typedef struct
+{
+    DataType_t type; //pove ali gre za razdaljo ali rotacijo
+    float value; //vrednost senzorja
+} TxMessage_t;
+
+typedef struct
+{
+    int32_t target_position;   //želeni položaj motorja
+    int32_t speed;             //hitrost motorja
+} StepperCmd_t;
+
+QueueHandle_t Queue_Tx;
+QueueHandle_t Queue_CMD_from_PC;
+
+
+
 void Task_Distance(void *argument)
 {
     HCSR04_SetNotifyTaskHandle(xTaskGetCurrentTaskHandle());
@@ -97,24 +122,59 @@ void Task_Distance(void *argument)
 }
 
 
+
 void Task_RotarySensor  (void *argument) {
-
-}
-
-void Task_StepperControl (void *argument) {
-
-}
-
-void Task_Tx(void *argument)
-{
-    float dist;
-    char msg[32];
+    TxMessage_t msg;
 
     for (;;)
     {
-        if (xQueueReceive(distanceQueue, &dist, portMAX_DELAY) == pdTRUE)
+        msg.type  = DATA_ROTARY;
+        msg.value = 90; // mock rotacija v stopinjah
+
+        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+}
+
+TaskHandle_t StepperControlHandle = NULL;
+
+
+void Task_StepperControl(void *pvParameters)
+{
+    StepperCmd_t receivedCmd;
+
+    for (;;)
+    {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if (xQueueReceive(Queue_CMD_from_PC,
+                          &receivedCmd,
+                          portMAX_DELAY) == pdPASS)
         {
-            int len = snprintf(msg, sizeof(msg), "%.2f\r\n", dist);
+            //MOCK obdelava ukaza
+            //krmiljenje NEMA17
+        }
+    }
+}
+
+
+void Task_Tx(void *argument)
+{
+    TxMessage_t msgStruct;
+    char msg[64];
+
+    for (;;)
+    {
+        // wait na nove podatke v Queue_Tx
+        if (xQueueReceive(Queue_Tx, &msgStruct, portMAX_DELAY) == pdTRUE)
+        {
+            // Pripravi sporočilo z oznako tipa in vrednostjo
+            int len = snprintf(msg, sizeof(msg),
+                               "%s: %.2f\r\n",
+                               msgStruct.type == DATA_DISTANCE ? "DIST" : "ROT",
+                               msgStruct.value);
 
             if (len > 0)
             {
@@ -129,9 +189,19 @@ void Task_Tx(void *argument)
     }
 }
 
-void Task_Rx   (void *argument) {
+void Task_Rx(void *pvParameters)
+	{
+	    StepperCmd_t cmd;
 
-}
+	    for (;;)
+	    {
+	    	//kle je treba dodat pravilno branje iz CDC
+	        cmd.target_position=180;  //stopinje ali koraki
+	        cmd.speed=200;  //hitrost
+	        xQueueSend(Queue_CMD_from_PC, &cmd, portMAX_DELAY);
+	        vTaskDelay(pdMS_TO_TICKS(3000));
+	    }
+	}
 
 
 const osThreadAttr_t distanceTask_attributes = {
@@ -179,14 +249,19 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  MX_USB_DEVICE_Init();
 
   HCSR04_Init(&htim5);
 
   /* USER CODE END 2 */
 
   /* Init scheduler */
-  osKernelInitialize();
+  Queue_Tx = xQueueCreate(10, sizeof(TxMessage_t));
+  Queue_CMD_from_PC = xQueueCreate(5, sizeof(StepperCmd_t));
 
+
+  configASSERT(Queue_Tx != NULL);
+  configASSERT(Queue_CMD_from_PC != NULL);
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -205,8 +280,15 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  xTaskCreate(Task_Distance,"Distance",256 * 4,NULL,2,NULL);
 
+      xTaskCreate(Task_RotarySensor,"Rotary", 512,NULL,2,NULL);
+
+      xTaskCreate(Task_StepperControl,"Stepper", 1024, NULL,3,NULL);
+
+      xTaskCreate(Task_Tx,"Tx",512 * 4, NULL, 2, NULL);
+
+      xTaskCreate(Task_Rx, "Rx", 512 * 4, NULL, 3, NULL);
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -216,7 +298,7 @@ int main(void)
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
-  osKernelStart();
+      vTaskStartScheduler();
 
   /* We should never get here as control is now taken by the scheduler */
 
