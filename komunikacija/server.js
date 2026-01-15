@@ -1,7 +1,6 @@
 import WebSocket, { WebSocketServer } from "ws";
 
-// Node 18+ (ti imaš 24) → fetch je GLOBAL
-// ❌ NE uvažaj node-fetch
+
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -14,6 +13,7 @@ wss.on("connection", socket => {
 
     console.log("Client povezan");
     socket.on("message", async (message) => {
+        //console.log("message je: ", message)
         try {
             const text = message.toString();
             let obj;
@@ -47,7 +47,7 @@ wss.on("connection", socket => {
                     compressedBuffer.length,
                     "bytes"
                 );
-                const res = await fetch("http://localhost:5000/obdelaj_sliko", {
+                const res = await fetch("http://localhost:8000/obdelaj_sliko", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/octet-stream"
@@ -66,10 +66,11 @@ wss.on("connection", socket => {
                 }
 
                 if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-                    webSocket.send(result);
+                    console.log("RESULT:", JSON.stringify(result));
+                    webSocket.send(JSON.stringify(result, null, 2));
                 } else {
                     console.log("WEB ni povezan");
-                    console.log("RESULT:", JSON.stringify(result, null, 2));
+                    console.log("RESULT:", JSON.stringify(result));
                 }
 
                 return;

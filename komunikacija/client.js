@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 
 const IMAGE_DIR = "C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/IMG_4905";   // 📁 mapa s slikami
-const DELAY_MS = 200;          // ⏱️ 200 ms ≈ 5 FPS
+const DELAY_MS = 200;          //200 ms ≈ 5 FPS
 
 const socket = new WebSocket("ws://localhost:8080");
 
@@ -25,7 +25,7 @@ socket.onopen = async () => {
         const filePath = path.join(IMAGE_DIR, file);
         console.log("Pošiljam:", file);
         const imageBuffer = fs.readFileSync(filePath);
-        const res = await fetch("http://127.0.0.1:5000/kompresija", {
+        const res = await fetch("http://127.0.0.1:8000/kompresija", {
             method: "POST",
             headers: {
                 "Content-Type": "application/octet-stream"
