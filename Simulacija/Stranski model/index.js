@@ -7,6 +7,7 @@ import * as THREE from './three.js';
 import { OrbitControls } from './OrbitControls.js';
 import { OBJLoader } from './OBJLoader.js';
 import { MTLLoader } from './MTLLoader.js';
+import { Sky } from './Sky.js';
 
 let renderer, scene, camera;
 let car = null;
@@ -39,6 +40,9 @@ let carWheels = [];
 
 // texture loader
 const texLoader = new THREE.TextureLoader();
+
+// sky
+let sky;
 
 init();
 animate();
@@ -79,9 +83,9 @@ function init() {
     scene.add(hemi);
 
     // TLA
-    const asphaltColor = texLoader.load('textures/asphalt_04_diff_4k.jpg');
-    const asphaltNormal = texLoader.load('textures/asphalt_04_nor_gl_4k.exr');
-    const asphaltRough = texLoader.load('textures/asphalt_04_rough_4k.exr');
+    const asphaltColor = texLoader.load('textures/asphalt/asphalt_04_diff_4k.jpg');
+    const asphaltNormal = texLoader.load('textures/asphalt/asphalt_04_nor_gl_4k.exr');
+    const asphaltRough = texLoader.load('textures/asphalt/asphalt_04_rough_4k.exr');
 
     [asphaltColor, asphaltNormal, asphaltRough].forEach(t => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -111,6 +115,10 @@ function init() {
     ground.material.normalScale.set(0.4, 0.4);
 
     scene.add(ground);
+
+    sky = new Sky();
+    sky.scale.setScalar(10000);
+    scene.add(sky);
 
     // pred-naložimo avto
     preloadModel("objects-models/rac_grafika_model_armatura2.mtl", "objects-models/rac_grafika_model_armatura2.obj", (obj) => {
@@ -428,12 +436,20 @@ function darkMode() {
     renderer.toneMappingExposure = 0.55;
 
     // luna kot vizualni element
-    const moonGeo = new THREE.SphereGeometry(5, 32, 32);
-    const moonMat = new THREE.MeshBasicMaterial({
-        color: 0xdde6ff,
-        transparent: true,
-        opacity: 0.85
+    const moonColor = texLoader.load('textures/moon/moon_01_diff_4k.jpg');
+    const moonNormal = texLoader.load('textures/asphalt/moon_01_nor_gl_4k.exr');
+    const moonRough = texLoader.load('textures/asphalt/moon_01_rough_4k.exr');
+
+     const moonMat = new THREE.MeshStandardMaterial({
+        map: moonColor,
+        normalMap: moonNormal,
+        roughnessMap: moonRough,
+        roughness: 0.5,
+        metalness: 0.5
     });
+
+    const moonGeo = new THREE.SphereGeometry(5, 32, 32);
+
     moon = new THREE.Mesh(moonGeo, moonMat);
     moon.position.set(-70, 80, -100);
     scene.add(moon);
@@ -443,6 +459,22 @@ function darkMode() {
     if (headlightGroup) {
         headlightGroup.visible = true;
     }
+
+    sky.visible = true;
+
+    sky.material.uniforms.turbidity.value = 1;
+    sky.material.uniforms.rayleigh.value = 0.2;
+    sky.material.uniforms.mieCoefficient.value = 0.001;
+    sky.material.uniforms.mieDirectionalG.value = 0.7;
+
+    // moon position (night)
+    const moonDir = new THREE.Vector3().setFromSphericalCoords(
+      1,
+      Math.PI * 0.85,
+      Math.PI * 0.5
+    );
+    sky.material.uniforms.sunPosition.value.copy(moonDir);
+
 }
 
 function addParkingGlow(space) {
@@ -558,6 +590,22 @@ function lightMode() {
     if (headlightGroup) {
         headlightGroup.visible = false;
     }
+
+    sky.visible = true;
+
+    sky.material.uniforms.turbidity.value = 8;
+    sky.material.uniforms.rayleigh.value = 2;
+    sky.material.uniforms.mieCoefficient.value = 0.005;
+    sky.material.uniforms.mieDirectionalG.value = 0.8;
+
+    // sun position (day)
+    const sun = new THREE.Vector3().setFromSphericalCoords(
+      1,
+      Math.PI * 0.45,
+      Math.PI * 0.25
+    );
+    sky.material.uniforms.sunPosition.value.copy(sun);
+
 }
 
 
