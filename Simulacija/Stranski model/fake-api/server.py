@@ -112,7 +112,8 @@ def video_loop():
             horizontal_pos = (center_x / w) * 100
             horizontal_pos = max(0, min(100, horizontal_pos))
 
-            vertical_pos = (center_x / w) * 100
+            center_y = (y1 + y2) / 2
+            vertical_pos = (center_y / h) * 100
             vertical_pos = max(0, min(100, vertical_pos))
 
 
