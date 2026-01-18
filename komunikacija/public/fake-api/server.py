@@ -30,6 +30,7 @@ from ultralytics import YOLO
 import threading
 import time
 import json
+import base64
 
 app = FastAPI()
 
@@ -91,10 +92,10 @@ def video_loop():
 
         # tole odkomentiraj za real time prikaz
         annotated = result.plot()
-        preview = cv2.resize(annotated, (600, 400), interpolation=cv2.INTER_AREA)
-        cv2.imshow("Processing Preview (600x400)", preview)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        #preview = cv2.resize(annotated, (600, 400), interpolation=cv2.INTER_AREA)
+        #cv2.imshow("Processing Preview (600x400)", preview)
+        #if cv2.waitKey(1) & 0xFF == ord("q"):
+        #    break
 
         h, w = frame.shape[:2]
 
@@ -112,7 +113,8 @@ def video_loop():
             horizontal_pos = (center_x / w) * 100
             horizontal_pos = max(0, min(100, horizontal_pos))
 
-            vertical_pos = (center_x / w) * 100
+            center_y = (y1 + y2) / 2
+            vertical_pos = (center_y / h) * 100
             vertical_pos = max(0, min(100, vertical_pos))
 
 
@@ -138,8 +140,15 @@ def video_loop():
                 "size": size
             })
 
+        _, buffer = cv2.imencode(".jpg", cv2.resize(annotated, (400, 260)))
+        image_base64 = buffer.tobytes()
+        image_base64 = base64.b64encode(image_base64).decode("utf-8")
+
         # websocket broadcast
-        asyncio.run(broadcast({"detections": detections}))
+        asyncio.run(broadcast({
+            "detections": detections,
+            "image": image_base64
+        }))
 
         save_line(DATA_FILE, detections)
 
@@ -148,7 +157,7 @@ def video_loop():
         cap.set(cv2.CAP_PROP_POS_FRAMES, current + SKIP)
 
         # okoli 1 na sekund
-        time.sleep(0.2)
+        time.sleep(0.35)
 
 # v odzadju procesiramo
 threading.Thread(target=video_loop, daemon=True).start()
