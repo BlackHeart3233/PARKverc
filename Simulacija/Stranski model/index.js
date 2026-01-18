@@ -12,7 +12,7 @@ import {Sky} from './Sky.js';
 let renderer, scene, camera;
 let car = null;
 let ground = null;
-let carSpeed = 0.005;
+let carSpeed = 0.03;
 
 // templatei za kloniranje - dodaj nove objekte kot template in v otherObjects ko jih izrisuješ
 let carTemplate = null;
@@ -54,6 +54,8 @@ const pools = {
     wall: []
 };
 
+let groundOffsetZ = 0;
+let displayYoloResult = false;
 
 init();
 animate();
@@ -132,8 +134,8 @@ function init() {
     scene.add(sky);
 
     moonColor = texLoader.load('textures/moon/moon_01_diff_4k.jpg');
-    moonNormal = texLoader.load('textures/asphalt/moon_01_nor_gl_4k.exr');
-    moonRough = texLoader.load('textures/asphalt/moon_01_rough_4k.exr');
+    moonNormal = texLoader.load('textures/moon/moon_01_nor_gl_4k.exr');
+    moonRough = texLoader.load('textures/moon/moon_01_rough_4k.exr');
 
     // pred-naložimo avto
     preloadModel("objects-models/rac_grafika_model_armatura2.mtl", "objects-models/rac_grafika_model_armatura2.obj", (obj) => {
@@ -229,6 +231,12 @@ const ws = new WebSocket("ws://localhost:8000/ws");
 ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
     const detections = data.detections;
+
+    if (displayYoloResult && data.image) {
+        const img = document.getElementById("camera-feed");
+        img.src = 'data:image/jpeg;base64,' + data.image;
+    }
+
     if (!detections) return;
 
     const used = {
@@ -287,9 +295,9 @@ function animate() {
     requestAnimationFrame(animate);
 
     if (car) {
-        parkingSpaces.forEach(space => space.position.z += carSpeed);
-        parkedCars.forEach(c => c.position.z += carSpeed);
-        otherObjects.forEach(obj => obj.position.z += carSpeed);
+        groundOffsetZ += carSpeed;
+        const ROAD_LENGTH = 1000;
+        ground.position.z = groundOffsetZ % ROAD_LENGTH;
     }
 
     renderer.render(scene, camera);
@@ -443,11 +451,11 @@ function darkMode() {
 function addParkingGlow(space) {
     const light = new THREE.PointLight(
         0x00ff66, // vivid green
-        2.5, // intensity (strong)
-        7, // distance
-        2  // decay
+        3,
+        40,
+        1
     );
-    light.position.set(0, 0.8, 0);
+    light.position.set(0, 1.5, 0);
     space.add(light);
 
     // visible glow source - nanj ne vpliva osvetlitev scene
@@ -476,11 +484,11 @@ function addParkingGlow(space) {
 function addCarGlow(space) {
     const light = new THREE.PointLight(
         0xff0000,
-        2.5,
-        7,
-        2
+        1.2,
+        12,
+        1
     );
-    light.position.set(0, 0.8, 0);
+    light.position.set(0, 2.5, 0);
     space.add(light);
 
     // visible glow source
@@ -609,6 +617,17 @@ function clearLighting() {
 window.addEventListener('keydown', (e) => {
     if (e.key === 'o' || e.key === 'O') {
         toggleMode();
+    }
+
+    if (e.key === 'y' || e.key === 'Y') {
+        displayYoloResult = !displayYoloResult;
+        if (!displayYoloResult) {
+            const img = document.getElementById("image");
+            img.style.display = 'none';
+        } else {
+            const img = document.getElementById("image");
+            img.style.display = 'block';
+        }
     }
 });
 

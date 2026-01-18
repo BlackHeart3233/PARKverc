@@ -1,45 +1,53 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+import asyncio
+import websockets
+import numpy as np
+import cv2
+import compressor
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+viewers = set()
 
-latest_image = None
-viewer_connections = set()
-
-@app.get("/")
-async def index():
-    return HTMLResponse(open("static/viewer.html").read())
-
-@app.websocket("/ws/camera")
-async def camera_ws(websocket: WebSocket):
-    global latest_image
-    await websocket.accept()
+async def camera_handler(ws):
     print("📷 Camera connected")
     try:
-        while True:
-            data = await websocket.receive_bytes()
-            latest_image = data
+        async for msg in ws:
+            # msg is compressed bytes
+            compressed = msg
 
-            # Broadcast to viewers
-            for viewer in viewer_connections.copy():
+            # ---- decompress ----
+            img = compressor.decompress(compressed)
+            # img: numpy array (H, W), uint8
+
+            # ---- encode to PNG ----
+            ok, png = cv2.imencode(".png", img)
+            if not ok:
+                continue
+
+            data = png.tobytes()
+
+            # ---- send to all viewers ----
+            for v in viewers.copy():
                 try:
-                    await viewer.send_bytes(latest_image)
-                except WebSocketDisconnect:
-                    viewer_connections.remove(viewer)
+                    await v.send(data)
+                except:
+                    viewers.remove(v)
 
-    except WebSocketDisconnect:
-        print("📷 Camera disconnected")
+    except websockets.ConnectionClosed:
+        print("❌ Camera disconnected")
 
-@app.websocket("/ws/viewer")
-async def viewer_ws(websocket: WebSocket):
-    await websocket.accept()
-    print("👁️ Viewer connected")
-    viewer_connections.add(websocket)
+async def viewer_handler(ws):
+    print("👁 Viewer connected")
+    viewers.add(ws)
     try:
-        while True:
-            await websocket.receive_text()  # Keep alive
-    except WebSocketDisconnect:
-        print("👁️ Viewer disconnected")
-        viewer_connections.remove(websocket)
+        async for _ in ws:
+            pass
+    finally:
+        viewers.remove(ws)
+        print("👁 Viewer disconnected")
+
+async def main():
+    async with websockets.serve(camera_handler, "0.0.0.0", 8000, path="/ws/camera"):
+        async with websockets.serve(viewer_handler, "0.0.0.0", 8000, path="/ws/viewer"):
+            print("🚀 Server running")
+            await asyncio.Future()
+
+asyncio.run(main())
