@@ -37,6 +37,9 @@ let isDarkMode = false;
 const WHEEL_RADIUS = 0.6;
 let carWheels = [];
 
+// texture loader
+const texLoader = new THREE.TextureLoader();
+
 init();
 animate();
 
@@ -76,13 +79,37 @@ function init() {
     scene.add(hemi);
 
     // TLA
+    const asphaltColor = texLoader.load('textures/asphalt_04_diff_4k.jpg');
+    const asphaltNormal = texLoader.load('textures/asphalt_04_nor_gl_4k.exr');
+    const asphaltRough = texLoader.load('textures/asphalt_04_rough_4k.exr');
+
+    [asphaltColor, asphaltNormal, asphaltRough].forEach(t => {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(1, 20); // long road tiling
+    });
+
+    const groundMat = new THREE.MeshStandardMaterial({
+        map: asphaltColor,
+        normalMap: asphaltNormal,
+        roughnessMap: asphaltRough,
+        roughness: 1.0,
+        metalness: 0.0
+    });
+
     ground = new THREE.Mesh(
         new THREE.BoxGeometry(100, 1, 1000),
-        new THREE.MeshLambertMaterial({ color: 0x444444 })
+        groundMat
     );
-    ground.castShadow = true;
-    ground.receiveShadow = true;
-    ground.position.y = -1.2;
+
+    ground.castShadow = false;
+    ground.receiveShadow = false;
+    ground.position.y = -2;
+
+    ground.material.envMap = null;
+    ground.material.envMapIntensity = 0;
+    ground.material.needsUpdate = true;
+    ground.material.normalScale.set(0.4, 0.4);
+
     scene.add(ground);
 
     // pred-naložimo avto
@@ -114,7 +141,7 @@ function init() {
         wallTemplate = obj;
     });
 
-    darkMode();
+    lightMode();
 
     if (envCam) {
         envCam.update(renderer, scene);
@@ -351,6 +378,8 @@ function addHeadlightsToCar(car) {
 
     car.add(headlightGroup);
 
+    headlightGroup.visible = false;
+
     // DEBUGGIRANJE
     /*const leftHelper = new THREE.SpotLightHelper(leftLight);
     const rightHelper = new THREE.SpotLightHelper(rightLight);
@@ -408,6 +437,12 @@ function darkMode() {
     moon = new THREE.Mesh(moonGeo, moonMat);
     moon.position.set(-70, 80, -100);
     scene.add(moon);
+
+    scene.fog = new THREE.FogExp2(0x0b1d3a, 0.006);
+
+    if (headlightGroup) {
+        headlightGroup.visible = true;
+    }
 }
 
 function addParkingGlow(space) {
@@ -517,6 +552,11 @@ function lightMode() {
     if (moon) {
         scene.remove(moon);
         moon = null;
+    }
+    scene.fog = null;
+
+    if (headlightGroup) {
+        headlightGroup.visible = false;
     }
 }
 
