@@ -134,8 +134,8 @@ function init() {
     scene.add(sky);
 
     moonColor = texLoader.load('textures/moon/moon_01_diff_4k.jpg');
-    moonNormal = texLoader.load('textures/asphalt/moon_01_nor_gl_4k.exr');
-    moonRough = texLoader.load('textures/asphalt/moon_01_rough_4k.exr');
+    moonNormal = texLoader.load('textures/moon/moon_01_nor_gl_4k.exr');
+    moonRough = texLoader.load('textures/moon/moon_01_rough_4k.exr');
 
     // pred-naložimo avto
     preloadModel("objects-models/rac_grafika_model_armatura2.mtl", "objects-models/rac_grafika_model_armatura2.obj", (obj) => {
