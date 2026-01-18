@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "distance.h"
 #include "usbd_cdc_if.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "queue.h"
@@ -47,6 +48,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim5;
 
 /* Definitions for defaultTask */
@@ -58,10 +60,12 @@ const osThreadAttr_t defaultTask_attributes = {
 };
 /* USER CODE BEGIN PV */
 
+volatile int32_t current_pos = 0;
+#define DISTANCE_MOCK   1   //1 = mock, 0 = real senzor
+volatile int32_t target_pos  = 0;
 
 osThreadId_t distanceTaskHandle;
 osThreadId_t txTaskHandle;
-QueueHandle_t distanceQueue;
 
 /* USER CODE END PV */
 
@@ -69,6 +73,7 @@ QueueHandle_t distanceQueue;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_TIM1_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -77,6 +82,16 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+#define RX_BUF_SIZE 64
+#define STEPS_DEADBAND 3
+
+volatile char rxBuf[RX_BUF_SIZE];
+volatile uint8_t rxLen = 0;
+
+
+
+TaskHandle_t RxTaskHandle = NULL;
 
 
 typedef enum
@@ -94,16 +109,68 @@ typedef struct
 typedef struct
 {
     int32_t target_position;   //želeni položaj motorja
-    int32_t speed;             //hitrost motorja
 } StepperCmd_t;
 
-QueueHandle_t Queue_Tx;
-QueueHandle_t Queue_CMD_from_PC;
 
+QueueHandle_t queueRotarySensor;
+QueueHandle_t distanceQueue;
+QueueHandle_t Queue_CMD_Stepper;
+QueueHandle_t Queue_Tx;
+
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance != TIM1) return;
+
+    if (current_pos == target_pos)
+    {
+        HAL_TIM_Base_Stop_IT(&htim1);   // STOP TIMER = STOP MOTOR
+        return;
+    }
+
+    if (current_pos < target_pos)
+    {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET); //DIR
+        current_pos++;
+    }
+    else
+    {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET); //DIR
+        current_pos--;
+    }
+
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
+    for (volatile int i = 0; i < 50; i++);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
+}
+
+
+
+int32_t deg_to_steps(float deg)
+{
+    return (int32_t)(deg * 200.0f / 360.0f);
+}
 
 
 void Task_Distance(void *argument)
 {
+#if DISTANCE_MOCK
+    float mock_dist = 20.0f;
+    float dir = 1.0f;
+
+    for (;;)
+    {
+        // simulacija razdalje 10–80 cm
+        mock_dist += dir * 0.5f;
+        if (mock_dist > 80.0f) dir = -1.0f;
+        if (mock_dist < 10.0f) dir =  1.0f;
+
+        xQueueOverwrite(distanceQueue, &mock_dist);
+
+        vTaskDelay(pdMS_TO_TICKS(60));
+    }
+
+#else
     HCSR04_SetNotifyTaskHandle(xTaskGetCurrentTaskHandle());
 
     for (;;)
@@ -113,95 +180,124 @@ void Task_Distance(void *argument)
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(30)) > 0)
         {
             float dist = HCSR04_GetDistanceCm();
-
             xQueueOverwrite(distanceQueue, &dist);
         }
 
         vTaskDelay(pdMS_TO_TICKS(60));
     }
+#endif
 }
+
 
 
 
 void Task_RotarySensor  (void *argument) {
-    TxMessage_t msg;
+    float angle = 0.0;
 
     for (;;)
     {
-        msg.type  = DATA_ROTARY;
-        msg.value = 90; // mock rotacija v stopinjah
+        angle += 1.0;
+        if (angle > 540) angle = -540;
 
-        xQueueSend(Queue_Tx, &msg, portMAX_DELAY);
-
-        vTaskDelay(pdMS_TO_TICKS(500));
+        xQueueOverwrite(queueRotarySensor, &angle);
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
+
 
 }
 
 TaskHandle_t StepperControlHandle = NULL;
-
-
 void Task_StepperControl(void *pvParameters)
 {
-    StepperCmd_t receivedCmd;
+    StepperCmd_t cmd;
 
     for (;;)
     {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        if (xQueueReceive(Queue_CMD_from_PC,
-                          &receivedCmd,
-                          portMAX_DELAY) == pdPASS)
-        {
-            //MOCK obdelava ukaza
-            //krmiljenje NEMA17
-        }
+    	xQueueReceive(Queue_CMD_Stepper, &cmd, portMAX_DELAY);
+        target_pos = cmd.target_position;
+        HAL_TIM_Base_Stop_IT(&htim1);
+        __HAL_TIM_SET_COUNTER(&htim1, 0);
+        HAL_TIM_Base_Start_IT(&htim1);
     }
 }
 
 
 void Task_Tx(void *argument)
 {
-    TxMessage_t msgStruct;
-    char msg[64];
+    float last_distance = 0.0f;
+    float last_rotary   = 0.0f;
+    uint8_t have_dist = 0;
+    uint8_t have_rot  = 0;
+
+    char buf[64];
 
     for (;;)
     {
-        // wait na nove podatke v Queue_Tx
-        if (xQueueReceive(Queue_Tx, &msgStruct, portMAX_DELAY) == pdTRUE)
+        /* Prejmi novo ROTARY vrednost */
+        if (xQueueReceive(queueRotarySensor, &last_rotary, 0) == pdTRUE)
         {
-            // Pripravi sporočilo z oznako tipa in vrednostjo
-            int len = snprintf(msg, sizeof(msg),
-                               "%s: %.2f\r\n",
-                               msgStruct.type == DATA_DISTANCE ? "DIST" : "ROT",
-                               msgStruct.value);
+            have_rot = 1;
+        }
 
-            if (len > 0)
+        /* Prejmi novo DISTANCE vrednost */
+        if (xQueueReceive(distanceQueue, &last_distance, 0) == pdTRUE)
+        {
+            have_dist = 1;
+        }
+
+        /* Če imamo OBA nova podatka → pošlji */
+        if (have_rot && have_dist)
+        {
+            int len = snprintf(buf, sizeof(buf),
+                "ROT:%.2f DIST:%.2f\r\n",
+                last_rotary,
+                last_distance);
+
+            while (CDC_Transmit_FS((uint8_t *)buf, len) == USBD_BUSY)
             {
-                while (CDC_Transmit_FS((uint8_t *)msg, len) == USBD_BUSY)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(2));
-                }
+                vTaskDelay(pdMS_TO_TICKS(2));
             }
 
-            vTaskDelay(pdMS_TO_TICKS(20));
+            /* reset flagov – čakamo na NOV frame */
+            have_rot  = 0;
+            have_dist = 0;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
+
+
+
+
+void Task_Rx(void *pvParameters)
+{
+    uint32_t notif;
+    StepperCmd_t cmd;
+
+    for (;;)
+    {
+        xTaskNotifyWait(0, 0xFFFFFFFF, &notif, portMAX_DELAY);
+
+        if (strncmp((char *)rxBuf, "ROTATE:", 7) == 0)
+        {
+            float deg = atof((char *)&rxBuf[7]);
+            int32_t new_target = deg_to_steps(deg);
+
+            if (abs(new_target - target_pos) < STEPS_DEADBAND)
+                continue;
+
+            cmd.target_position = new_target;
+            xQueueOverwrite(Queue_CMD_Stepper, &cmd);
         }
     }
 }
 
-void Task_Rx(void *pvParameters)
-	{
-	    StepperCmd_t cmd;
 
-	    for (;;)
-	    {
-	    	//kle je treba dodat pravilno branje iz CDC
-	        cmd.target_position=180;  //stopinje ali koraki
-	        cmd.speed=200;  //hitrost
-	        xQueueSend(Queue_CMD_from_PC, &cmd, portMAX_DELAY);
-	        vTaskDelay(pdMS_TO_TICKS(3000));
-	    }
-	}
+
+
+
 
 
 const osThreadAttr_t distanceTask_attributes = {
@@ -215,6 +311,29 @@ const osThreadAttr_t txTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
+
+
+const osThreadAttr_t StepperTask_attributes  = {
+		  .name = "Stepper",
+		  .stack_size = 256 * 4,
+		  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+
+const osThreadAttr_t RxTask_attributes  = {
+		  .name = "Task_Rx",
+		  .stack_size = 256 * 4,
+		  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+
+const osThreadAttr_t rotaryTask_attributes = {
+  .name = "RotaryTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+
+
+
 
 /* USER CODE END 0 */
 
@@ -248,20 +367,16 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM5_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
-
   HCSR04_Init(&htim5);
 
   /* USER CODE END 2 */
 
   /* Init scheduler */
-  Queue_Tx = xQueueCreate(10, sizeof(TxMessage_t));
-  Queue_CMD_from_PC = xQueueCreate(5, sizeof(StepperCmd_t));
+  osKernelInitialize();
 
-
-  configASSERT(Queue_Tx != NULL);
-  configASSERT(Queue_CMD_from_PC != NULL);
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -275,21 +390,31 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
+  queueRotarySensor = xQueueCreate(1, sizeof(float));
+  configASSERT(queueRotarySensor);
+
+  distanceQueue = xQueueCreate(1, sizeof(float));
+  configASSERT(distanceQueue);
+
+  Queue_CMD_Stepper = xQueueCreate(1, sizeof(StepperCmd_t));
+  configASSERT(Queue_CMD_Stepper);
+
+  Queue_Tx = xQueueCreate(8, sizeof(TxMessage_t));
+  configASSERT(Queue_Tx);
+
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  xTaskCreate(Task_Distance,"Distance",256 * 4,NULL,2,NULL);
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-      xTaskCreate(Task_RotarySensor,"Rotary", 512,NULL,2,NULL);
-
-      xTaskCreate(Task_StepperControl,"Stepper", 1024, NULL,3,NULL);
-
-      xTaskCreate(Task_Tx,"Tx",512 * 4, NULL, 2, NULL);
-
-      xTaskCreate(Task_Rx, "Rx", 512 * 4, NULL, 3, NULL);
   /* USER CODE BEGIN RTOS_THREADS */
+  osThreadNew(Task_Distance, NULL, &distanceTask_attributes);
+  osThreadNew(Task_Tx, NULL, &txTask_attributes);
+  osThreadNew(Task_StepperControl, NULL, &StepperTask_attributes);
+  RxTaskHandle = osThreadNew(Task_Rx, NULL, &RxTask_attributes);
+  osThreadNew(Task_RotarySensor, NULL, &rotaryTask_attributes);
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
@@ -298,7 +423,7 @@ int main(void)
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
-      vTaskStartScheduler();
+  osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
 
@@ -331,14 +456,17 @@ void SystemClock_Config(void)
   * in the RCC_OscInitTypeDef structure.
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSIState       = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 192;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLState   = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource  = RCC_PLLSOURCE_HSI;
+
+  /* PLL delilniki – pusti enake kot prej za test */
+  RCC_OscInitStruct.PLL.PLLM = 16;   // 16 MHz / 16 = 1 MHz
+  RCC_OscInitStruct.PLL.PLLN = 192;  // 1 MHz * 192 = 192 MHz
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV6; // 192 / 6 = 32 MHz SYSCLK
+  RCC_OscInitStruct.PLL.PLLQ = 4;    // 192 / 4 = 48 MHz za USB
+
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -346,17 +474,68 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB buses clocks
   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+                              | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
+
+  /** Enables the Clock Security System
+  */
+  HAL_RCC_EnableCSS();
+}
+
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 1399;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 99;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
 }
 
 /**
@@ -434,12 +613,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DISTANCE_SENZOR_TRIGGER_GPIO_Port, DISTANCE_SENZOR_TRIGGER_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13|GPIO_PIN_14, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : DISTANCE_SENZOR_TRIGGER_Pin */
   GPIO_InitStruct.Pin = DISTANCE_SENZOR_TRIGGER_Pin;
@@ -454,6 +637,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC7 PC8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -473,21 +663,14 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
-  MX_USB_DEVICE_Init();
-
-  distanceQueue = xQueueCreate(1, sizeof(float));
-  configASSERT(distanceQueue != NULL);
-
-  distanceTaskHandle = osThreadNew(Task_Distance, NULL, &distanceTask_attributes);
-  configASSERT(distanceTaskHandle != NULL);
-
-  txTaskHandle = osThreadNew(Task_Tx, NULL, &txTask_attributes);
-  configASSERT(txTaskHandle != NULL);
-
-  for (;;)
+  /* init code for USB_DEVICE */
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
   {
-    osDelay(1000);
+    osDelay(1);
   }
+  /* USER CODE END 5 */
 }
 
 /**
