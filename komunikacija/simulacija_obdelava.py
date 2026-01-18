@@ -29,12 +29,14 @@ app.mount(
     name="stranski_public"
 )
 
-#app.mount(
-#    "/vzvratni_public",
-#    StaticFiles(directory="vzvratni_public", html=True),
-#    name="vzvratni_public"
-#)
+app.mount(
+    "/vzvratni_public",
+    StaticFiles(directory="vzvratni_public", html=True),
+    name="vzvratni_public"
+)
 
+DEBUG_DIR = "debug"
+os.makedirs(DEBUG_DIR, exist_ok=True)
 #python -m uvicorn simulacija_obdelava:app --reload --host 0.0.0.0 --port 8000
 
 #VZRATNI MODEL
@@ -51,6 +53,19 @@ async def obdelaj_sliko(request: Request):
     if not compressed:
         return {"error": "empty body"}
 
+    #posiljam barvne slike 
+    arr = np.frombuffer(compressed, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+
+    if img is None:
+        return {"error": "invalid image"}    
+
+    ts = int(time.time() * 1000)
+    original_path = os.path.join(DEBUG_DIR, f"{ts}_original.jpg")
+    cv2.imwrite(original_path, img)
+
+    """
     try:
         gray = compressor.decompress(compressed)
         gray = np.asarray(gray, dtype=np.uint8)
@@ -59,8 +74,8 @@ async def obdelaj_sliko(request: Request):
         return {"error": "decompress failed"}
 
     img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    """
 
-    # YOLO
     result = model(img, verbose=False, conf=0.6)[0]
 
     if result.obb is not None:
@@ -82,7 +97,6 @@ async def obdelaj_sliko(request: Request):
             box_pts = cv2.boxPoints(box)
             box_pts = np.intp(box_pts)
 
-            # 🟢 RIŠI NA SLIKO
             cv2.polylines(
                 img,
                 [box_pts],
@@ -91,7 +105,6 @@ async def obdelaj_sliko(request: Request):
                 thickness=2
             )
 
-            # 🟢 SHRANI JSON
             coords_list = box_pts.tolist()
             data["lines"].append({
                 "corners": [
@@ -99,7 +112,6 @@ async def obdelaj_sliko(request: Request):
                 ]
             })
 
-    # 🟢 vedno posodobi frame (tudi če ni detekcij)
     latest_frame = img.copy()
 
     return {"json": data}

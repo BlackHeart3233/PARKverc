@@ -8,6 +8,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { OBJLoader } from './OBJLoader.js';
 import { MTLLoader } from './MTLLoader.js';
 
+
 let renderer, scene, camera;
 let car = null;
 let ground = null;
@@ -447,3 +448,10 @@ window.addEventListener('keydown', (e) => {
         toggleMode();
     }
 });
+
+const goBtn = document.getElementById("goBtn");
+
+goBtn.addEventListener("click", () => {
+    window.location.href = "http://localhost:8000/vzvratni_public/"; 
+});
+
