@@ -81,7 +81,7 @@ function init() {
         0.1, // blizu
         1000 // daleč
     );
-    camera.position.set(-30, 20, 40);
+    camera.position.set(-25, 15, 20);
     camera.lookAt(0, 0, 0);
 
     const controls = new OrbitControls(camera, renderer.domElement);
