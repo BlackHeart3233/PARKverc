@@ -1,3 +1,4 @@
+# pip install websockets opencv-python numpy
 import asyncio
 import websockets
 import cv2
