@@ -8,7 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 app = FastAPI()
 
 DATA_FILE = "yolo_data.txt"
-SEND_INTERVAL_SECONDS = 0.2
+SEND_INTERVAL_SECONDS = 0.5
 
 clients: Set[WebSocket] = set()
 

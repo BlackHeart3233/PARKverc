@@ -4,14 +4,15 @@
  * */
 
 import * as THREE from './three.js';
-import { OrbitControls } from './OrbitControls.js';
-import { OBJLoader } from './OBJLoader.js';
-import { MTLLoader } from './MTLLoader.js';
+import {OrbitControls} from './OrbitControls.js';
+import {OBJLoader} from './OBJLoader.js';
+import {MTLLoader} from './MTLLoader.js';
+import {Sky} from './Sky.js';
 
 let renderer, scene, camera;
 let car = null;
 let ground = null;
-let carSpeed = 0.005;
+let carSpeed = 0.03;
 
 // templatei za kloniranje - dodaj nove objekte kot template in v otherObjects ko jih izrisuješ
 let carTemplate = null;
@@ -32,6 +33,29 @@ let envRT = null;
 let envCam = null;
 let moon = null;
 let isDarkMode = false;
+
+// aimacija obračanja kol
+const WHEEL_RADIUS = 0.6;
+let carWheels = [];
+
+/* izbljšave 15.1 naprej*/
+
+// texture loader
+const texLoader = new THREE.TextureLoader();
+
+// moon
+let moonColor, moonNormal, moonRough, moonMesh;
+// sky
+let sky;
+const pools = {
+    car: [],
+    human: [],
+    parking: [],
+    wall: []
+};
+
+let groundOffsetZ = 0;
+let displayYoloResult = false;
 
 init();
 animate();
@@ -72,14 +96,46 @@ function init() {
     scene.add(hemi);
 
     // TLA
+    const asphaltColor = texLoader.load('textures/asphalt/asphalt_04_diff_4k.jpg');
+    const asphaltNormal = texLoader.load('textures/asphalt/asphalt_04_nor_gl_4k.exr');
+    const asphaltRough = texLoader.load('textures/asphalt/asphalt_04_rough_4k.exr');
+
+    [asphaltColor, asphaltNormal, asphaltRough].forEach(t => {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(1, 20); // long road tiling
+    });
+
+    const groundMat = new THREE.MeshStandardMaterial({
+        map: asphaltColor,
+        normalMap: asphaltNormal,
+        roughnessMap: asphaltRough,
+        roughness: 1.0,
+        metalness: 0.0
+    });
+
     ground = new THREE.Mesh(
         new THREE.BoxGeometry(100, 1, 1000),
-        new THREE.MeshLambertMaterial({ color: 0x444444 })
+        groundMat
     );
-    ground.castShadow = true;
-    ground.receiveShadow = true;
+
+    ground.castShadow = false;
+    ground.receiveShadow = false;
     ground.position.y = -2;
+
+    ground.material.envMap = null;
+    ground.material.envMapIntensity = 0;
+    ground.material.needsUpdate = true;
+    ground.material.normalScale.set(0.4, 0.4);
+
     scene.add(ground);
+
+    sky = new Sky();
+    sky.scale.setScalar(10000);
+    scene.add(sky);
+
+    moonColor = texLoader.load('textures/moon/moon_01_diff_4k.jpg');
+    moonNormal = texLoader.load('textures/moon/moon_01_nor_gl_4k.exr');
+    moonRough = texLoader.load('textures/moon/moon_01_rough_4k.exr');
 
     // pred-naložimo avto
     preloadModel("objects-models/rac_grafika_model_armatura2.mtl", "objects-models/rac_grafika_model_armatura2.obj", (obj) => {
@@ -156,7 +212,7 @@ function cloneObject(template) {
 
         // fallback ko ni materialov
         if (!child.material) {
-            child.material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            child.material = new THREE.MeshLambertMaterial({color: 0xffffff});
             return;
         }
 
@@ -169,38 +225,6 @@ function cloneObject(template) {
     return clone;
 }
 
-// TODO mogoče namesto risanja + brisanja samo cachiramo in premikamo objekte
-function removeObject(obj) {
-    if (!obj) return;
-
-    scene.remove(obj);
-
-    obj.traverse(child => {
-        if (!child.isMesh) return;
-
-        if (child.geometry) child.geometry.dispose();
-
-        if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose && m.dispose());
-        } else if (child.material && child.material.dispose) {
-            child.material.dispose();
-        }
-    });
-}
-
-// TODO isto kot eno gor
-function clearSpawnedObjects() {
-    parkedCars.forEach(obj => removeObject(obj));
-    parkedCars.length = 0;
-
-    parkingSpaces.forEach(obj => removeObject(obj));
-    parkingSpaces.length = 0;
-
-    otherObjects.forEach(obj => removeObject(obj));
-    otherObjects.length = 0;
-}
-
-
 // websocke povezav
 const ws = new WebSocket("ws://localhost:8000/ws");
 
@@ -208,67 +232,72 @@ ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
     const detections = data.detections;
 
-    if (!detections || !detections.length) return;
+    if (displayYoloResult && data.image) {
+        const img = document.getElementById("camera-feed");
+        img.src = 'data:image/jpeg;base64,' + data.image;
+    }
 
-    clearSpawnedObjects();
+    if (!detections) return;
 
-    // TODO filtriramo avtomobile v ozadju in ostale detekcije -> mogoče kr na bcakendu
+    const used = {
+        car: new Set(),
+        human: new Set(),
+        parking: new Set(),
+        wall: new Set()
+    };
+
     detections.forEach(det => {
         const zPos = THREE.MathUtils.lerp(-20, 20, det.left_to_right / 100);
         let xPos = THREE.MathUtils.lerp(10, 30, det.down_to_up / 100);
 
         if (det.label === "Avtomobil" && carTemplate) {
-            // malo površno ampak zaenkrat ok
-            if (xPos > 22) {
-                xPos = 30;
+            if (xPos > 22) xPos = 30;
+
+            const car = getFromPool("car", carTemplate);
+            car.position.set(xPos, 0, zPos);
+            if (isDarkMode && !car.userData.glowAdded) {
+                addCarGlow(car);
+                car.userData.glowAdded = true;
             }
-
-            const newCar = cloneObject(carTemplate);
-
-            newCar.rotation.y -= Math.PI / 2;
-            newCar.position.set(xPos, 0, zPos);
-            parkedCars.push(newCar);
-        }
-
-        if (det.label.toLowerCase().includes("steber") && wallTemplate) {
-            let xPos = THREE.MathUtils.lerp(10, 30, det.coordinates / 100);
-
-            // če je sredina objekt v zgornji četrtini potem je v odzadju drugače spredaj
-            if (xPos > 25) {
-                xPos = 10;
-            } else {
-                xPos = 30;
-            }
-            const newWall = cloneObject(wallTemplate);
-
-            newWall.position.set(xPos, 0, zPos);
-            otherObjects.push(newWall);
+            used.car.add(car);
         }
 
         if (det.label.toLowerCase().includes("lovek") && humanTemplate) {
-            const newHuman = cloneObject(humanTemplate);
-
-            newHuman.position.set(xPos, 0, zPos);
-            otherObjects.push(newHuman);
+            const human = getFromPool("human", humanTemplate);
+            human.position.set(xPos, 0, zPos);
+            used.human.add(human);
         }
 
-        // TODO bolj precizno + različni parkingi
-        if (det.label.toLowerCase().includes("parki") && parkingTemplate) {
-            const newParking = cloneObject(parkingTemplate);
+        if (det.label.toLowerCase().includes("steber") && wallTemplate) {
+            const wall = getFromPool("wall", wallTemplate);
+            wall.position.set(xPos, 0, zPos);
+            used.wall.add(wall);
+        }
 
-            newParking.position.set(10, 0, zPos);
-            parkingSpaces.push(newParking);
+        if (det.label.toLowerCase().includes("parki") && parkingTemplate) {
+            const p = getFromPool("parking", parkingTemplate);
+            p.position.set(10, 0, zPos);
+            if (isDarkMode && !p.userData.glowAdded) {
+                addParkingGlow(p);
+                p.userData.glowAdded = true;
+            }
+            used.parking.add(p);
         }
     });
+
+    releaseUnused(pools.car, used.car);
+    releaseUnused(pools.human, used.human);
+    releaseUnused(pools.wall, used.wall);
+    releaseUnused(pools.parking, used.parking);
 };
 
 function animate() {
     requestAnimationFrame(animate);
 
     if (car) {
-        parkingSpaces.forEach(space => space.position.z += carSpeed);
-        parkedCars.forEach(c => c.position.z += carSpeed);
-        otherObjects.forEach(obj => obj.position.z += carSpeed);
+        groundOffsetZ += carSpeed;
+        const ROAD_LENGTH = 1000;
+        ground.position.z = groundOffsetZ % ROAD_LENGTH;
     }
 
     renderer.render(scene, camera);
@@ -286,12 +315,12 @@ function addHeadlightsToCar(car) {
     headlightGroup = new THREE.Group();
 
     const mk = () => new THREE.SpotLight(
-      0xffffff,
-      250,        // intensity
-      200,          // distance: 0 = infinite
-      1.5,  // angle: wide cone
-      1.6,        // penumbra
-      1           // decay: less falloff
+        0xffffff,
+        250,        // intensity
+        200,          // distance: 0 = infinite
+        1.5,  // angle: wide cone
+        1.6,        // penumbra
+        1           // decay: less falloff
     );
 
     const leftLight = mk();
@@ -316,7 +345,7 @@ function addHeadlightsToCar(car) {
     headlightGroup.add(rightLight);
 
     const bulbGeo = new THREE.SphereGeometry(0.08, 12, 12);
-    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const bulbMat = new THREE.MeshBasicMaterial({color: 0xffffff});
     const bulbL = new THREE.Mesh(bulbGeo, bulbMat);
     const bulbR = new THREE.Mesh(bulbGeo, bulbMat);
     bulbL.position.copy(leftLight.position);
@@ -324,6 +353,8 @@ function addHeadlightsToCar(car) {
     headlightGroup.add(bulbL, bulbR);
 
     car.add(headlightGroup);
+
+    headlightGroup.visible = false;
 
     // DEBUGGIRANJE
     /*const leftHelper = new THREE.SpotLightHelper(leftLight);
@@ -334,81 +365,223 @@ function addHeadlightsToCar(car) {
 }
 
 function darkMode() {
-    scene.background = new THREE.Color(0x0b1d3a);
+    scene.background = new THREE.Color(0x02050c); // skoraj črno nebo
 
-    ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+    // ambientna luč
+    ambientLight = new THREE.AmbientLight(0x0b10ff, 0.52);
     scene.add(ambientLight);
 
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    sunLight = new THREE.DirectionalLight(0xaecbff, 0.45);
+    // "luna" – zelo šibka globalna svetloba
+    sunLight = new THREE.DirectionalLight(0x9fb4ff, 0.48);
+    sunLight.position.set(-80, 120, -40);
     sunLight.castShadow = true;
-    sunLight.position.set(-50, 80, -50);
-    sunLight.shadow.mapSize.set(2048, 2048);
-    sunLight.shadow.radius = 4;
-    sunLight.shadow.bias = -0.0002;
+    // resolucija sence
+    sunLight.shadow.mapSize.set(1024, 1024);
+    // fixes shadow acne
+    sunLight.shadow.bias = -0.0004;
     scene.add(sunLight);
 
-    scene.background = new THREE.Color(0x0b1d3a);
-
+    // barva neeba
     hemiLight = new THREE.HemisphereLight(
-        0x3a5fa0,
-        0x0a0a0a,
-        0.45
+        0x0b1d3a,
+        0x000000,
+        0.08
     );
     scene.add(hemiLight);
 
-    envRT = new THREE.WebGLCubeRenderTarget(128);
-    envCam = new THREE.CubeCamera(0.1, 1000, envRT);
-    scene.add(envCam);
+    // močna nočna megla
+    scene.fog = new THREE.FogExp2(0x02050c, 0.016);
 
+    // environment temen
+    if (envCam) {
+        scene.remove(envCam);
+        envCam = null;
+    }
+    envRT = new THREE.WebGLCubeRenderTarget(64);
+    envCam = new THREE.CubeCamera(0.1, 500, envRT);
+    scene.add(envCam);
     scene.environment = envRT.texture;
 
+    // tone mapping – temna scena
+    // ACES -> realisičen contrast in smooth highlights
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.5;
+    renderer.toneMappingExposure = 0.55;
 
-    const moonGeo = new THREE.SphereGeometry(6, 32, 32);
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xdde6ff });
-    moonMat.color.set(0xffffff);
-    moonMat.transparent = true;
-    moonMat.opacity = 0.9;
+    // luna kot vizualni element
 
-    moon = new THREE.Mesh(moonGeo, moonMat);
-    moon.position.copy(sunLight.position).normalize().multiplyScalar(400);
-    scene.add(moon);
+    if (!moonMesh) {
+    const moonMat = new THREE.MeshStandardMaterial({
+        map: moonColor,
+        normalMap: moonNormal,
+        roughnessMap: moonRough,
+        roughness: 0.5,
+        metalness: 0.5
+    });
 
-    scene.fog = new THREE.FogExp2(0x0b1d3a, 0.006);
+    moonMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(5, 32, 32),
+        moonMat
+    );
+        moonMesh.position.set(-70, 80, -100);
+        scene.add(moonMesh);
+    }
+    moonMesh.visible = true;
+
+    if (headlightGroup) {
+        headlightGroup.visible = true;
+    }
+
+    sky.visible = true;
+
+    sky.material.uniforms.turbidity.value = 1;
+    sky.material.uniforms.rayleigh.value = 0.2;
+    sky.material.uniforms.mieCoefficient.value = 0.001;
+    sky.material.uniforms.mieDirectionalG.value = 0.7;
+
+    // moon position (night)
+    const moonDir = new THREE.Vector3().setFromSphericalCoords(
+        1,
+        Math.PI * 0.85,
+        Math.PI * 0.5
+    );
+    sky.material.uniforms.sunPosition.value.copy(moonDir);
+    renderer.shadowMap.enabled = false;
+}
+
+function addParkingGlow(space) {
+    const light = new THREE.PointLight(
+        0x00ff66, // vivid green
+        3,
+        40,
+        1
+    );
+    light.position.set(0, 1.5, 0);
+    space.add(light);
+
+    // visible glow source - nanj ne vpliva osvetlitev scene
+    const glowGeo = new THREE.SphereGeometry(0.12, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x00ff66
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(light.position);
+    space.add(glow);
+
+    // boost emissive on parking lines
+    space.traverse(child => {
+        if (!child.isMesh) return;
+        if (!child.material) return;
+
+        if (child.material.emissive) {
+            child.material.emissive.set(0x00ff66);
+            child.material.emissiveIntensity = 1.2;
+        }
+    });
+
+    space.userData.glowLight = light;
+}
+
+function addCarGlow(space) {
+    const light = new THREE.PointLight(
+        0xff0000,
+        1.2,
+        12,
+        1
+    );
+    light.position.set(0, 2.5, 0);
+    space.add(light);
+
+    // visible glow source
+    const glowGeo = new THREE.SphereGeometry(0.12, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xff0000
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(light.position);
+    space.add(glow);
+
+    // boost emissive on parking lines
+    space.traverse(child => {
+        if (!child.isMesh) return;
+        if (!child.material) return;
+
+        if (child.material.emissive) {
+            child.material.emissive.set(0xff0000);
+            child.material.emissiveIntensity = 1.2;
+        }
+    });
+
+    space.userData.glowLight = light;
 }
 
 function lightMode() {
-    scene.background = new THREE.Color(0xbfd7ff); // light sky-ish
+    scene.background = new THREE.Color(0x87bfff); // močno dnevno nebo
 
-    ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+    // odstranimo meglo
+    scene.fog = null;
+
+    // ambient samo kot fill
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-
-    sunLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    // močno sonce
+    sunLight = new THREE.DirectionalLight(0xfff2d6, 1.4);
+    sunLight.position.set(-120, 150, 60);
     sunLight.castShadow = true;
-    sunLight.position.set(-100, 100, 0);
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.bias = -0.0003;
     scene.add(sunLight);
 
-    hemiLight = new THREE.HemisphereLight(0xffffff, 0xdddddd, 0.25);
+    // zelo šibek hemisphere bounce
+    hemiLight = new THREE.HemisphereLight(
+        0xcfe7ff, // nebo
+        0xffffff, // tla
+        0.15
+    );
     scene.add(hemiLight);
 
+    // okoljski odboji
+    // bolj podrobni
+    if (envCam) {
+        scene.remove(envCam);
+        envCam = null;
+    }
     envRT = new THREE.WebGLCubeRenderTarget(128);
     envCam = new THREE.CubeCamera(0.1, 1000, envRT);
     scene.add(envCam);
     scene.environment = envRT.texture;
 
+    // tone mapping – realen dan
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.95;
 
+    // odstrani luno če obstaja
     if (moon) {
+        if (moonMesh) moonMesh.visible = false;
         scene.remove(moon);
         moon = null;
     }
     scene.fog = null;
+
+    if (headlightGroup) {
+        headlightGroup.visible = false;
+    }
+
+    sky.visible = true;
+
+    sky.material.uniforms.turbidity.value = 8;
+    sky.material.uniforms.rayleigh.value = 2;
+    sky.material.uniforms.mieCoefficient.value = 0.005;
+    sky.material.uniforms.mieDirectionalG.value = 0.8;
+
+    // sun position (day)
+    const sun = new THREE.Vector3().setFromSphericalCoords(
+        1,
+        Math.PI * 0.45,
+        Math.PI * 0.25
+    );
+    sky.material.uniforms.sunPosition.value.copy(sun);
+
 }
 
 function toggleMode() {
@@ -441,9 +614,44 @@ function clearLighting() {
     scene.fog = null;
 }
 
-
 window.addEventListener('keydown', (e) => {
     if (e.key === 'o' || e.key === 'O') {
         toggleMode();
     }
+
+    if (e.key === 'y' || e.key === 'Y') {
+        displayYoloResult = !displayYoloResult;
+        if (!displayYoloResult) {
+            const img = document.getElementById("image");
+            img.style.display = 'none';
+        } else {
+            const img = document.getElementById("image");
+            img.style.display = 'block';
+        }
+    }
 });
+
+function getFromPool(type, template) {
+    const pool = pools[type];
+
+    let obj = pool.find(o => !o.visible);
+    if (!obj) {
+        obj = cloneObject(template);
+
+        if (type === "car") {
+            obj.rotation.y -= Math.PI / 2;
+            obj.userData.rotated = true;
+        }
+
+        pool.push(obj);
+    }
+
+    obj.visible = true;
+    return obj;
+}
+
+function releaseUnused(pool, usedSet) {
+    pool.forEach(o => {
+        if (!usedSet.has(o)) o.visible = false;
+    });
+}

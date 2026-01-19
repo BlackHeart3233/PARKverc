@@ -1,0 +1,7 @@
+../Core/Src/distance.c:46:20:trigger_pulse_10us	16	static,ignoring_inline_asm
+../Core/Src/distance.c:60:6:HCSR04_Init	16	static
+../Core/Src/distance.c:78:6:HCSR04_SetNotifyTaskHandle	16	static
+../Core/Src/distance.c:85:6:HCSR04_Trigger	8	static
+../Core/Src/distance.c:94:7:HCSR04_GetDistanceCm	4	static
+../Core/Src/distance.c:99:9:HCSR04_HasMeasurement	4	static
+../Core/Src/distance.c:106:6:HCSR04_TIM_IC_Callback	24	static,ignoring_inline_asm

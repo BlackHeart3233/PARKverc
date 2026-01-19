@@ -3,9 +3,10 @@ import WebSocket from "ws";
 import fs from "fs";
 import path from "path";
 
-const IMAGE_DIR = "C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/IMG_4905";   // 📁 mapa s slikami
-const DELAY_MS = 200;          //200 ms ≈ 5 FPS
+const IMAGE_DIR = "C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/prikaz";
+const DELAY_MS = 200;          //ms
 
+//IMG_4891
 const socket = new WebSocket("ws://localhost:8080");
 
 function sleep(ms) {
@@ -19,13 +20,19 @@ socket.onopen = async () => {
     files = files.filter(f =>
         f.endsWith(".jpg") || f.endsWith(".png") || f.endsWith(".jpeg")
     );
-    files.sort();
+    files.sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)[0], 10);
+        const nb = parseInt(b.match(/\d+/)[0], 10);
+        return na - nb;
+    });
+
+
     console.log("Najdenih slik:", files.length);
     for (const file of files) {
         const filePath = path.join(IMAGE_DIR, file);
         console.log("Pošiljam:", file);
         const imageBuffer = fs.readFileSync(filePath);
-        const res = await fetch("http://127.0.0.1:8000/kompresija", {
+        /*const res = await fetch("http://127.0.0.1:8000/kompresija", {
             method: "POST",
             headers: {
                 "Content-Type": "application/octet-stream"
@@ -46,7 +53,16 @@ socket.onopen = async () => {
             data: base64,
             filename: file
         }));
+        await sleep(DELAY_MS);*/
+        const base64 = imageBuffer.toString("base64");
+        socket.send(JSON.stringify({
+            type: "KAMERA",
+            data: base64,
+            filename: file
+        }));
         await sleep(DELAY_MS);
+
+
     }
 
     console.log("Vse slike poslane");

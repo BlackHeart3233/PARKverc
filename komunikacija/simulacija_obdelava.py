@@ -17,6 +17,7 @@ from typing import Set
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
+import base64
 
 latest_frame = None
 
@@ -29,12 +30,14 @@ app.mount(
     name="stranski_public"
 )
 
-#app.mount(
-#    "/vzvratni_public",
-#    StaticFiles(directory="vzvratni_public", html=True),
-#    name="vzvratni_public"
-#)
+app.mount(
+    "/vzvratni_public",
+    StaticFiles(directory="vzvratni_public", html=True),
+    name="vzvratni_public"
+)
 
+DEBUG_DIR = "debug"
+os.makedirs(DEBUG_DIR, exist_ok=True)
 #python -m uvicorn simulacija_obdelava:app --reload --host 0.0.0.0 --port 8000
 
 #VZRATNI MODEL
@@ -51,6 +54,19 @@ async def obdelaj_sliko(request: Request):
     if not compressed:
         return {"error": "empty body"}
 
+    #posiljam barvne slike 
+    arr = np.frombuffer(compressed, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+
+    if img is None:
+        return {"error": "invalid image"}    
+
+    ts = int(time.time() * 1000)
+    original_path = os.path.join(DEBUG_DIR, f"{ts}_original.jpg")
+    cv2.imwrite(original_path, img)
+
+    """
     try:
         gray = compressor.decompress(compressed)
         gray = np.asarray(gray, dtype=np.uint8)
@@ -59,8 +75,8 @@ async def obdelaj_sliko(request: Request):
         return {"error": "decompress failed"}
 
     img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    """
 
-    # YOLO
     result = model(img, verbose=False, conf=0.6)[0]
 
     if result.obb is not None:
@@ -82,7 +98,6 @@ async def obdelaj_sliko(request: Request):
             box_pts = cv2.boxPoints(box)
             box_pts = np.intp(box_pts)
 
-            # 🟢 RIŠI NA SLIKO
             cv2.polylines(
                 img,
                 [box_pts],
@@ -91,7 +106,6 @@ async def obdelaj_sliko(request: Request):
                 thickness=2
             )
 
-            # 🟢 SHRANI JSON
             coords_list = box_pts.tolist()
             data["lines"].append({
                 "corners": [
@@ -99,7 +113,6 @@ async def obdelaj_sliko(request: Request):
                 ]
             })
 
-    # 🟢 vedno posodobi frame (tudi če ni detekcij)
     latest_frame = img.copy()
 
     return {"json": data}
@@ -154,71 +167,76 @@ def video():
 
 DATA_FILE = "yolo_data.txt"
 SEND_INTERVAL_SECONDS = 0.2
+stranski_model = YOLO("https://huggingface.co/ParkVerc/model_stranski/resolve/main/stranski_model_augmentiran/weights/last.pt")  # <-- replace with local path for speed
 
-clients: Set[WebSocket] = set()
+frontend_clients: set[WebSocket] = set()
 
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    clients.add(websocket)
-    print("Client connected")
-
+@app.websocket("/ws/frontend")
+async def ws_frontend(ws: WebSocket):
+    await ws.accept()
+    frontend_clients.add(ws)
     try:
         while True:
             await asyncio.sleep(60)
-    except WebSocketDisconnect:
-        print("Client disconnected")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
     finally:
-        if websocket in clients:
-            clients.remove(websocket)
+        frontend_clients.remove(ws)
 
 
-async def broadcast(message: dict):
-    dead_clients = []
-    for ws in list(clients):
+async def broadcast(payload: dict):
+    dead = []
+    for ws in frontend_clients:
         try:
-            await ws.send_text(json.dumps(message))
-        except Exception as e:
-            print(f"Error sending to client: {e}")
-            dead_clients.append(ws)
-
-    for ws in dead_clients:
-        if ws in clients:
-            clients.remove(ws)
+            await ws.send_text(json.dumps(payload))
+        except:
+            dead.append(ws)
+    for ws in dead:
+        frontend_clients.remove(ws)
 
 
-async def file_loop():
-    while True:
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
+@app.websocket("/ws/producer")
+async def ws_producer(ws: WebSocket):
+    await ws.accept()
 
-                    try:
-                        detections = json.loads(line)
-                    except json.JSONDecodeError:
-                        detections = line
+    try:
+        while True:
+            msg = await ws.receive_text()
+            img_bytes = base64.b64decode(msg)
+            arr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                continue
 
-                    await broadcast({"detections": detections})
+            result = stranski_model(frame)[0]
+            annotated = result.plot()
 
-                    await asyncio.sleep(SEND_INTERVAL_SECONDS)
+            h, w = frame.shape[:2]
+            detections = []
 
-            print("eof, restarting")
+            for box in result.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                cls = int(box.cls[0])
+                conf = float(box.conf[0])
 
-        except FileNotFoundError:
-            print(f"{DATA_FILE} not found")
-            await asyncio.sleep(2)
-        except Exception as e:
-            print(f"Error in file_loop: {e}")
-            await asyncio.sleep(2)
+                cx = (x1 + x2) / 2
+                cy = (y1 + y2) / 2
 
+                detections.append({
+                    "label": stranski_model.names[cls],
+                    "confidence": conf,
+                    "left_to_right": max(0, min(100, (cx / w) * 100)),
+                    "up_to_down": max(0, min(100, (cy / h) * 100)),
+                    "down_to_up": 100 - max(0, min(100, (cy / h) * 100)),
+                    "coordinates": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                    "size": {"width": x2 - x1, "height": y2 - y1},
+                })
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(file_loop())
+            _, buf = cv2.imencode(".jpg", cv2.resize(annotated, (350, 230)))
+            image_b64 = base64.b64encode(buf.tobytes()).decode()
 
+            await broadcast({
+                "detections": detections,
+                "image": image_b64
+            })
+
+    except Exception:
+        pass

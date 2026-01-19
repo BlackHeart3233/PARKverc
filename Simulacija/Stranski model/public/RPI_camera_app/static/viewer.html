@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Camera Viewer</title>
+    <style>
+        body { background: #111; color: #eee; text-align: center; }
+        img { max-width: 100%; border: 2px solid #555; }
+    </style>
+</head>
+<body>
+    <h1>📸 Live Camera Feed</h1>
+    <img id="image" />
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws/viewer`);
+        const img = document.getElementById("image");
+
+        ws.binaryType = "blob";
+
+        ws.onmessage = (event) => {
+            const blob = event.data;
+            const url = URL.createObjectURL(blob);
+            img.src = url;
+
+            // Release memory after image loads
+            img.onload = () => URL.revokeObjectURL(url);
+        };
+
+        // Keep connection alive
+        setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send("ping");
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
