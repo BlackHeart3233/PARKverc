@@ -97,7 +97,8 @@ function init() {
 
     parkingOverlayTextures = {
         electric: texLoader.load('textures/parking_slike/electric.png'),
-        invalid: texLoader.load('textures/parking_slike/invalid.jpg')
+        invalid: texLoader.load('textures/parking_slike/invalid.jpg'),
+        druzina: texLoader.load('textures/parking_slike/druzina.png')
     };
     Object.values(parkingOverlayTextures).forEach(t => {
         t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
@@ -287,7 +288,9 @@ ws.onmessage = (msg) => {
 
             if (label.includes("ele")) {
                 addParkingOverlay(p, "electric");
-            } else if (label.includes("valid") || label.includes("dru")) {
+            } else if (label.includes("dru")) {
+                addParkingOverlay(p, "druzina");
+            } else if (label.includes("valid")) {
                 addParkingOverlay(p, "invalid");
             } else {
                 removeParkingOverlay(p);
