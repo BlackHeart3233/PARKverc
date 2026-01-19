@@ -226,7 +226,7 @@ function cloneObject(template) {
 }
 
 // websocke povezav
-const ws = new WebSocket("ws://localhost:8000/ws");
+const ws = new WebSocket("ws://localhost:8000/ws/frontend");
 
 ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
