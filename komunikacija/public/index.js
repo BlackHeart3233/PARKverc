@@ -50,6 +50,8 @@ const pools = {
 let groundOffsetZ = 0;
 let displayYoloResult = false;
 
+let parkingOverlayTextures;
+
 init();
 animate();
 
@@ -92,6 +94,15 @@ function init() {
     const asphaltColor = texLoader.load('textures/asphalt/asphalt_04_diff_4k.jpg');
     const asphaltNormal = texLoader.load('textures/asphalt/asphalt_04_nor_gl_4k.exr');
     const asphaltRough = texLoader.load('textures/asphalt/asphalt_04_rough_4k.exr');
+
+    parkingOverlayTextures = {
+        electric: texLoader.load('textures/parking_slike/electric.png'),
+        invalid: texLoader.load('textures/parking_slike/invalid.jpg')
+    };
+    Object.values(parkingOverlayTextures).forEach(t => {
+        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        t.anisotropy = 4;
+    });
 
     [asphaltColor, asphaltNormal, asphaltRough].forEach(t => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -271,6 +282,17 @@ ws.onmessage = (msg) => {
         if (det.label.toLowerCase().includes("parki") && parkingTemplate) {
             const p = getFromPool("parking", parkingTemplate);
             p.position.set(10, 0, zPos);
+
+            const label = det.label.toLowerCase();
+
+            if (label.includes("ele")) {
+                addParkingOverlay(p, "electric");
+            } else if (label.includes("valid") || label.includes("dru")) {
+                addParkingOverlay(p, "invalid");
+            } else {
+                removeParkingOverlay(p);
+            }
+
             if (isDarkMode && !p.userData.glowAdded) {
                 addParkingGlow(p);
                 p.userData.glowAdded = true;
@@ -649,9 +671,20 @@ function getFromPool(type, template) {
 
 function releaseUnused(pool, usedSet) {
     pool.forEach(o => {
-        if (!usedSet.has(o)) o.visible = false;
+        if (!usedSet.has(o)) {
+            o.visible = false;
+
+            if (o.userData.overlay) {
+                o.remove(o.userData.overlay);
+                o.userData.overlay = null;
+                o.userData.overlayType = null;
+            }
+
+            o.userData.glowAdded = false;
+        }
     });
 }
+
 
 function createStars() {
     const count = 500;
@@ -682,4 +715,41 @@ function createStars() {
     stars = new THREE.Points(geo, mat);
     stars.visible = false;
     scene.add(stars);
+}
+
+function addParkingOverlay(parkingObj, type) {
+    if (!parkingOverlayTextures[type]) return;
+
+    if (parkingObj.userData.overlay) {
+        parkingObj.remove(parkingObj.userData.overlay);
+    }
+
+    const box = new THREE.Box3().setFromObject(parkingObj);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    const geo = new THREE.PlaneGeometry(size.x * 0.5, size.z * 0.8);
+
+    const mat = new THREE.MeshBasicMaterial({
+        map: parkingOverlayTextures[type],
+        transparent: true,
+        depthWrite: false
+    });
+
+    const overlay = new THREE.Mesh(geo, mat);
+
+    overlay.rotation.x = -Math.PI / 2;
+    overlay.position.y = box.max.y + 0.02;
+
+    parkingObj.add(overlay);
+    parkingObj.userData.overlay = overlay;
+    parkingObj.userData.overlayType = type;
+}
+
+function removeParkingOverlay(parkingObj) {
+    if (!parkingObj.userData.overlay) return;
+
+    parkingObj.remove(parkingObj.userData.overlay);
+    parkingObj.userData.overlay = null;
+    parkingObj.userData.overlayType = null;
 }
