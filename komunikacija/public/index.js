@@ -51,6 +51,13 @@ let groundOffsetZ = 0;
 let displayYoloResult = false;
 
 let parkingOverlayTextures;
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 0;
+let quality = "high"; // "high" | "medium" | "low"
+const modelLoadTimes = {};
+let lastFrameTime = performance.now();
+let frameTimes = [];
 
 init();
 animate();
@@ -178,14 +185,22 @@ function init() {
     }
 
     window.addEventListener('resize', onWindowResize);
+
+    setTimeout(() => {
+        console.table(modelLoadTimes);
+    }, 3000);
 }
 
 function preloadModel(mtl, obj, callback) {
+    const start = performance.now();
+
     const mtlLoader = new MTLLoader();
     mtlLoader.load(mtl, (materials) => {
         materials.preload();
+
         const objLoader = new OBJLoader();
         objLoader.setMaterials(materials);
+
         objLoader.load(obj, (object) => {
             object.traverse(child => {
                 if (child instanceof THREE.Mesh) {
@@ -193,6 +208,13 @@ function preloadModel(mtl, obj, callback) {
                     child.receiveShadow = true;
                 }
             });
+
+            const end = performance.now();
+            const time = Math.round(end - start);
+
+            modelLoadTimes[obj] = time;
+            console.log(`[modelload time] ${obj}: ${time} ms`);
+
             callback(object);
         });
     });
@@ -235,6 +257,12 @@ function cloneObject(template) {
 const ws = new WebSocket("ws://localhost:8000/ws/frontend");
 
 ws.onmessage = (msg) => {
+    let stats = {
+        cars: 0,
+        humans: 0,
+        parkings: 0
+    };
+
     const data = JSON.parse(msg.data);
     const detections = data.detections;
 
@@ -257,6 +285,7 @@ ws.onmessage = (msg) => {
         let xPos = THREE.MathUtils.lerp(10, 30, det.down_to_up / 100);
 
         if (det.label === "Avtomobil" && carTemplate) {
+            stats.cars++;
             if (xPos > 22) xPos = 30;
 
             const car = getFromPool("car", carTemplate);
@@ -269,6 +298,8 @@ ws.onmessage = (msg) => {
         }
 
         if (det.label.toLowerCase().includes("lovek") && humanTemplate) {
+            stats.humans++;
+
             const human = getFromPool("human", humanTemplate);
             human.position.set(xPos, 0, zPos);
             used.human.add(human);
@@ -281,6 +312,7 @@ ws.onmessage = (msg) => {
         }
 
         if (det.label.toLowerCase().includes("parki") && parkingTemplate) {
+            stats.parkings ++;
             const p = getFromPool("parking", parkingTemplate);
             p.position.set(10, 0, zPos);
 
@@ -308,10 +340,32 @@ ws.onmessage = (msg) => {
     releaseUnused(pools.human, used.human);
     releaseUnused(pools.wall, used.wall);
     releaseUnused(pools.parking, used.parking);
+    updateHUD(stats);
 };
 
 function animate() {
     requestAnimationFrame(animate);
+
+    // FPS calculation
+    const now = performance.now();
+    const frameTime = now - lastFrameTime;
+    lastFrameTime = now;
+    frameCount++;
+
+    frameTimes.push(frameTime);
+
+    // keep last 300 frames (~5s)
+    if (frameTimes.length > 300) {
+        frameTimes.shift();
+    }
+
+
+    if (now - lastTime >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = now;
+        document.getElementById("hud-fps").innerText = fps;
+    }
 
     if (car) {
         groundOffsetZ += carSpeed;
@@ -320,6 +374,20 @@ function animate() {
     }
 
     renderer.render(scene, camera);
+}
+
+function updateHUD(stats) {
+    document.getElementById("hud-mode").innerText =
+        isDarkMode ? "Night" : "Day";
+
+    document.getElementById("hud-cars").innerText =
+        stats.cars;
+
+    document.getElementById("hud-humans").innerText =
+        stats.humans;
+
+        document.getElementById("hud-parkings").innerText =
+        stats.parkings;
 }
 
 function onWindowResize() {
@@ -651,6 +719,11 @@ window.addEventListener('keydown', (e) => {
             img.style.display = 'block';
         }
     }
+
+    if (e.key === '1') applyQuality("low");
+    if (e.key === '2') applyQuality("medium");
+    if (e.key === '3') applyQuality("high");
+
 });
 
 function getFromPool(type, template) {
@@ -782,3 +855,40 @@ function removeParkingGlow(space) {
         return true;
     });
 }
+
+function applyQuality(level) {
+    quality = level;
+
+    if (level === "high") {
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    if (level === "medium") {
+        renderer.setPixelRatio(1);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.BasicShadowMap;
+        renderer.setSize(window.innerWidth * 0.85, window.innerHeight * 0.85, false);
+    }
+
+    if (level === "low") {
+        renderer.setPixelRatio(0.75);
+        renderer.shadowMap.enabled = false;
+        renderer.setSize(window.innerWidth * 0.7, window.innerHeight * 0.7, false);
+    }
+
+    document.getElementById("hud-quality").innerText = quality;
+}
+
+setInterval(() => {
+    if (!frameTimes.length) return;
+
+    const avg =
+        frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+
+    console.log("Avg frame time:", avg.toFixed(2), "ms");
+    document.getElementById("frame-time").innerText = avg.toFixed(2);
+
+}, 2000);

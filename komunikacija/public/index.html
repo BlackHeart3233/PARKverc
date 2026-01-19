@@ -4,10 +4,31 @@
     <style>
         body { margin: 0; }
         canvas { width: 100%; height: 100% }
+        #hud {
+            position: fixed;
+            top: 50px;
+            left: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #00ffcc;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 14px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
     </style>
     <meta charset="UTF-8">
 </head>
 <body>
+<div id="hud">
+    <div>Mode: <span id="hud-mode">Day</span></div>
+    <div>Cars: <span id="hud-cars">0</span></div>
+    <div>Cars: <span id="hud-parkings">0</span></div>
+    <div>Humans: <span id="hud-humans">0</span></div>
+    <div>FPS: <span id="hud-fps">0</span></div>
+    <div>Quality: <span id="hud-quality"></span></div>
+    <div>Frame render time: <span id="frame-time"></span>ms</div>
+</div>
 <a style="text-underline: none; padding: 4px; background: cadetblue; z-index: 999; top: 0; left: 0; position:absolute;" href="http://localhost:8000/vzvratni_public">Premakni za zadenjski pogled</a>
 <div id="image" style="display: none; position: absolute; bottom: 0; left: 0; width: 350px; height: 230px">
     <img src="" alt="slika" id="camera-feed" />
