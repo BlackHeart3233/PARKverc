@@ -674,11 +674,8 @@ function releaseUnused(pool, usedSet) {
         if (!usedSet.has(o)) {
             o.visible = false;
 
-            if (o.userData.overlay) {
-                o.remove(o.userData.overlay);
-                o.userData.overlay = null;
-                o.userData.overlayType = null;
-            }
+            removeParkingOverlay(o);
+            removeParkingGlow(o);
 
             o.userData.glowAdded = false;
         }
@@ -720,15 +717,22 @@ function createStars() {
 function addParkingOverlay(parkingObj, type) {
     if (!parkingOverlayTextures[type]) return;
 
-    if (parkingObj.userData.overlay) {
-        parkingObj.remove(parkingObj.userData.overlay);
-    }
+    removeParkingOverlay(parkingObj);
 
-    const box = new THREE.Box3().setFromObject(parkingObj);
+    let baseMesh = null;
+    parkingObj.traverse(c => {
+        if (c.isMesh && !baseMesh) baseMesh = c;
+    });
+    if (!baseMesh) return;
+
+    const box = new THREE.Box3().setFromObject(baseMesh);
     const size = new THREE.Vector3();
     box.getSize(size);
 
-    const geo = new THREE.PlaneGeometry(size.x * 0.5, size.z * 0.8);
+    const geo = new THREE.PlaneGeometry(
+        size.x * 0.5,
+        size.z * 0.7
+    );
 
     const mat = new THREE.MeshBasicMaterial({
         map: parkingOverlayTextures[type],
@@ -739,7 +743,13 @@ function addParkingOverlay(parkingObj, type) {
     const overlay = new THREE.Mesh(geo, mat);
 
     overlay.rotation.x = -Math.PI / 2;
-    overlay.position.y = box.max.y + 0.02;
+    overlay.position.set(
+        0,
+        box.max.y - baseMesh.position.y + 0.01,
+        0
+    );
+
+    overlay.renderOrder = 10;
 
     parkingObj.add(overlay);
     parkingObj.userData.overlay = overlay;
@@ -752,4 +762,20 @@ function removeParkingOverlay(parkingObj) {
     parkingObj.remove(parkingObj.userData.overlay);
     parkingObj.userData.overlay = null;
     parkingObj.userData.overlayType = null;
+}
+
+function removeParkingGlow(space) {
+    if (!space.userData.glowLight) return;
+
+    space.remove(space.userData.glowLight);
+    space.userData.glowLight = null;
+
+    space.children = space.children.filter(c => {
+        if (c.isMesh && c.material?.color?.getHex() === 0x00ff66) {
+            c.geometry.dispose();
+            c.material.dispose();
+            return false;
+        }
+        return true;
+    });
 }
