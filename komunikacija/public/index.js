@@ -20,10 +20,6 @@ let parkingTemplate = null;
 let wallTemplate = null;
 let humanTemplate = null;
 
-let otherObjects = [];
-let parkingSpaces = [];
-let parkedCars = [];
-
 // luči
 let sunLight = null;
 let ambientLight = null;
@@ -34,10 +30,6 @@ let envCam = null;
 let moon = null;
 let isDarkMode = false;
 
-// aimacija obračanja kol
-const WHEEL_RADIUS = 0.6;
-let carWheels = [];
-
 /* izbljšave 15.1 naprej*/
 
 // texture loader
@@ -47,6 +39,7 @@ const texLoader = new THREE.TextureLoader();
 let moonColor, moonNormal, moonRough, moonMesh;
 // sky
 let sky;
+let stars;
 const pools = {
     car: [],
     human: [],
@@ -132,6 +125,7 @@ function init() {
     sky = new Sky();
     sky.scale.setScalar(10000);
     scene.add(sky);
+    createStars();
 
     moonColor = texLoader.load('textures/moon/moon_01_diff_4k.jpg');
     moonNormal = texLoader.load('textures/moon/moon_01_nor_gl_4k.exr');
@@ -326,8 +320,8 @@ function addHeadlightsToCar(car) {
     const leftLight = mk();
     const rightLight = mk();
 
-    leftLight.position.set(4, 1.0, -2);
-    rightLight.position.set(4, 1.0, 2);
+    leftLight.position.set(2, 1.0, -8);
+    rightLight.position.set(2, 1.0, -4);
 
     const leftTarget = new THREE.Object3D();
     const rightTarget = new THREE.Object3D();
@@ -335,8 +329,8 @@ function addHeadlightsToCar(car) {
     car.add(leftTarget);
     car.add(rightTarget);
 
-    leftTarget.position.set(40, 0.6, 0.9);
-    rightTarget.position.set(40, 0.6, -0.9);
+    leftTarget.position.set(20, 0.2, -13.9);
+    rightTarget.position.set(100, 0.2, -13.9);
 
     leftLight.target = leftTarget;
     rightLight.target = rightTarget;
@@ -405,7 +399,7 @@ function darkMode() {
     // tone mapping – temna scena
     // ACES -> realisičen contrast in smooth highlights
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.55;
+    renderer.toneMappingExposure = 0.7;
 
     // luna kot vizualni element
 
@@ -415,7 +409,8 @@ function darkMode() {
         normalMap: moonNormal,
         roughnessMap: moonRough,
         roughness: 0.5,
-        metalness: 0.5
+        metalness: 0.5,
+        color: 0xfff1c1
     });
 
     moonMesh = new THREE.Mesh(
@@ -446,6 +441,8 @@ function darkMode() {
     );
     sky.material.uniforms.sunPosition.value.copy(moonDir);
     renderer.shadowMap.enabled = false;
+
+    stars.visible = true;
 }
 
 function addParkingGlow(space) {
@@ -581,7 +578,7 @@ function lightMode() {
         Math.PI * 0.25
     );
     sky.material.uniforms.sunPosition.value.copy(sun);
-
+    stars.visible = false;
 }
 
 function toggleMode() {
@@ -654,4 +651,35 @@ function releaseUnused(pool, usedSet) {
     pool.forEach(o => {
         if (!usedSet.has(o)) o.visible = false;
     });
+}
+
+function createStars() {
+    const count = 500;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+
+    for (let i = 0; i < count; i++) {
+        const r = 200;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(THREE.MathUtils.randFloat(-0.2, 1)); // fewer near horizon
+
+        pos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = r * Math.cos(phi);
+        pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+
+    const mat = new THREE.PointsMaterial({
+        color: 0xffff00 ,        // warm yellow
+        size: 2.0,              // IMPORTANT (0.7 is too small)
+        transparent: true,
+        opacity: 1.0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    stars = new THREE.Points(geo, mat);
+    stars.visible = false;
+    scene.add(stars);
 }
