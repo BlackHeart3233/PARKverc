@@ -112,7 +112,6 @@ script.onload = () => {
   unityInstance = instance;
   document.querySelector("#unity-loading-bar").style.display = "none";
 
-  // === WEB SOCKET ===
   let ws = new WebSocket("ws://10.163.40.218:8080");
 
   ws.onopen = () => {
@@ -120,39 +119,7 @@ script.onload = () => {
     ws.send("WEB");
   };
 
- /* const SRC_MIN_X = 0;
-const SRC_MAX_X = canvas.width;   // 1920
-const SRC_MAX_Y = canvas.height;  // 1080
-const SRC_MIN_Y = 0;
 
-const DST_MIN_X = -100;
-const DST_MAX_X = 1500;
-const DST_MIN_Y = -100;
-const DST_MAX_Y = 1500;
-
-function remap(value, inMin, inMax, outMin, outMax) {
-  return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
-}
-
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function remapPoint(p) {
-  return {
-    x: clamp(
-         remap(p.x, 0, canvas.width, DST_MIN_X, DST_MAX_X),
-         DST_MIN_X,
-         DST_MAX_X
-       ),
-    y: clamp(
-         remap(canvas.height - p.y, 0, canvas.height, DST_MIN_Y, DST_MAX_Y),
-         DST_MIN_Y,
-         DST_MAX_Y
-       )
-  };
-}
-*/
 
 
 const realTestJson = JSON.stringify({
@@ -193,24 +160,15 @@ const realTestJson = JSON.stringify({
 });
 
 
-
-/*
-const parsed = JSON.parse(realTestJson);
-
-parsed.json.lines.forEach(line => {
-  line.corners = line.corners.map(remapPoint);
-});*/
-
 setTimeout(() => {
   console.log("Sending parking lines JSON to Unity");
   unityInstance.SendMessage(
-    "ParkingLines",            // 👈 PRAVILNO IME
+    "ParkingLines",            
     "ReceiveJsonFromJS",
     realTestJson
   );
 }, 500);
 
-//  JSON.stringify(parsed)
 
 
   ws.onerror = (e) => console.error("WS ERROR", e);
