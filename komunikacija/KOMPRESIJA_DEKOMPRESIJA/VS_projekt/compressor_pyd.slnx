@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="compressor_pyd.vcxproj" Id="c93e3515-c86d-4afb-bcdc-efc905b8be4f" />
+</Solution>

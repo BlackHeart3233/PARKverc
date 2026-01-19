@@ -1,0 +1,19 @@
+sudo USER: apt install -y python3.13-venv python3.13-dev build-essential
+exit
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install pybind11 numpy opencv-python
+pip install setuptools wheel
+python3 -m pip install opencv-python
+
+
+
+za dobit build:
+python setup.py build_ext --inplace
+
+za zbrisat build:
+rm -rf build
+
+zagon kode:
+python3 kompresija_cpp.py
