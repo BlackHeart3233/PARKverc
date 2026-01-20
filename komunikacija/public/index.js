@@ -892,3 +892,10 @@ setInterval(() => {
     document.getElementById("frame-time").innerText = avg.toFixed(2);
 
 }, 2000);
+
+
+const goBtn = document.getElementById("goBtn");
+
+goBtn.addEventListener("click", () => {
+    window.location.href = "http://localhost:8000/vzvratni_public/"; 
+});
