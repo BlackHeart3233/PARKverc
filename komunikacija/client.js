@@ -3,10 +3,12 @@ import WebSocket from "ws";
 import fs from "fs";
 import path from "path";
 
-const IMAGE_DIR = "C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/prikaz";
+const IMAGE_DIR = "C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/IMG_4904";
 const DELAY_MS = 200;          //ms
 
 //IMG_4891
+
+//"C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/IMG_4901
 const socket = new WebSocket("ws://localhost:8080");
 
 function sleep(ms) {

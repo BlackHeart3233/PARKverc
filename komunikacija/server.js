@@ -65,13 +65,14 @@ wss.on("connection", socket => {
                     };
                 }
 
-                if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-                    console.log("RESULT:", JSON.stringify(result));
-                    webSocket.send(JSON.stringify(result, null, 2));
-                } else {
-                    console.log("WEB ni povezan");
-                    console.log("RESULT:", JSON.stringify(result));
-                }
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                webSocket.send(JSON.stringify({
+                json: result.json
+                }));
+                webSocket.send(JSON.stringify({ type: "IMAGE", image: result.image }));
+            } else {
+                console.log("WEB ni povezan");
+            }
 
                 return;
             }

@@ -19,8 +19,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 import base64
 
-latest_frame = None
-
 app = FastAPI()
 
 
@@ -113,9 +111,15 @@ async def obdelaj_sliko(request: Request):
                 ]
             })
 
-    latest_frame = img.copy()
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
+    _, buffer = cv2.imencode(".jpg", img, encode_param)
+    img_b64 = base64.b64encode(buffer).decode("utf-8")
 
-    return {"json": data}
+    return {
+        "json": data,
+        "image": img_b64   # <-- dodano
+    }
+
 
 
 @app.post("/kompresija")
@@ -132,33 +136,6 @@ async def kompresija(request: Request):
     )
 
    
-from fastapi.responses import StreamingResponse
-
-def mjpeg_generator():
-    global latest_frame
-    while True:
-        if latest_frame is None:
-            time.sleep(0.01)
-            continue
-
-        _, jpg = cv2.imencode(".jpg", latest_frame)
-        frame = jpg.tobytes()
-
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" +
-            frame +
-            b"\r\n"
-        )
-        time.sleep(0.03)  # ~30 FPS
-
-
-@app.get("/video")
-def video():
-    return StreamingResponse(
-        mjpeg_generator(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
-    )
 
 
 #stranski model   - Lovro 
