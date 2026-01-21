@@ -20,7 +20,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
-
+extern volatile char rxBuf[];
+extern volatile uint8_t rxLen;
+#define RX_BUF_SIZE 64
 /* USER CODE BEGIN INCLUDE */
 #include "cmsis_os.h"
 #include "FreeRTOS.h"
@@ -128,7 +130,7 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 static int8_t CDC_Init_FS(void);
 static int8_t CDC_DeInit_FS(void);
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
-static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
+static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len);
 static int8_t CDC_TransmitCplt_FS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
@@ -262,14 +264,37 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
+extern TaskHandle_t RxTaskHandle;
+
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
-  /* USER CODE BEGIN 6 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  return (USBD_OK);
-  /* USER CODE END 6 */
+    for (uint32_t i = 0; i < *Len; i++)
+    {
+        char c = Buf[i];
+
+        if (c == '\n' || c == '\r')
+        {
+            rxBuf[rxLen] = 0;
+
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xTaskNotifyFromISR(RxTaskHandle, 1, eSetValueWithOverwrite,
+                               &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+            rxLen = 0;
+        }
+        else if (rxLen < RX_BUF_SIZE - 1)
+        {
+            rxBuf[rxLen++] = c;
+        }
+    }
+
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, Buf);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+    return USBD_OK;
 }
+
 
 /**
   * @brief  CDC_Transmit_FS

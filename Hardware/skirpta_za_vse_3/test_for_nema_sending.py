@@ -2,7 +2,7 @@ import serial
 import time
 import threading
 
-PORT = "COM9"
+PORT = "COM6"
 BAUD = 115200
 
 ser = serial.Serial(
@@ -58,14 +58,14 @@ threading.Thread(target=rx_thread, daemon=True).start()
 
 # test ukazi
 send_rotate(540)
-time.sleep(5)
+time.sleep(10)
 send_rotate(0)
-time.sleep(5)
+time.sleep(10)
 send_rotate(-540)
 
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print("Exiting...")
-    ser.close()
+#try:
+#    while True:
+#        time.sleep(1)
+#except KeyboardInterrupt:
+#    print("Exiting...")
+#    ser.close()
