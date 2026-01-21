@@ -2,7 +2,7 @@ import serial
 import time
 import threading
 
-PORT = "COM6"
+PORT = "COM9"
 BAUD = 115200
 
 ser = serial.Serial(
