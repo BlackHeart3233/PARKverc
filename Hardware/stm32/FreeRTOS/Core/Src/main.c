@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "queue.h"
+#include <stdbool.h>
+
 
 /* USER CODE END Includes */
 
@@ -48,6 +50,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim5;
 
@@ -62,6 +66,8 @@ const osThreadAttr_t defaultTask_attributes = {
 
 volatile int32_t current_pos = 0;
 #define DISTANCE_MOCK   1   //1 = mock, 0 = real senzor
+#define ROTATION_SENZOR_MOCK   0   //1 = mock, 0 = real senzor
+
 volatile int32_t target_pos  = 0;
 
 osThreadId_t distanceTaskHandle;
@@ -74,6 +80,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_I2C1_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -85,10 +92,23 @@ void StartDefaultTask(void *argument);
 
 #define RX_BUF_SIZE 64
 #define STEPS_DEADBAND 3
+#define THRESHOLD 2048
+#define NOISE_THRESHOLD 4
+
 
 volatile char rxBuf[RX_BUF_SIZE];
 volatile uint8_t rxLen = 0;
 
+volatile uint8_t reg = 0x0E;
+volatile uint8_t data[2];
+
+volatile uint16_t raw;
+volatile uint16_t prev_raw = 0;
+
+volatile int32_t turns = 0;
+volatile bool first_read = true;
+
+volatile char usb_buf[64];
 
 
 TaskHandle_t RxTaskHandle = NULL;
@@ -192,6 +212,8 @@ void Task_Distance(void *argument)
 
 
 void Task_RotarySensor  (void *argument) {
+	#if ROTATION_SENZOR_MOCK
+
     float angle = 0.0;
 
     for (;;)
@@ -202,7 +224,71 @@ void Task_RotarySensor  (void *argument) {
         xQueueOverwrite(queueRotarySensor, &angle);
         vTaskDelay(pdMS_TO_TICKS(20));
     }
+	#else
 
+
+    while (1)
+    {
+        // read AS5600
+        HAL_I2C_Master_Transmit(&hi2c1, 0x36 << 1, &reg, 1, 100);
+        HAL_I2C_Master_Receive(&hi2c1, 0x36 << 1, data, 2, 100);
+
+        raw = ((data[0] << 8) | data[1]) & 0x0FFF; // 0–4095
+
+        if (first_read)
+        {
+            prev_raw = raw;
+            first_read = false;
+        }
+        else
+        {
+            int16_t diff = (int16_t)raw - (int16_t)prev_raw;
+
+
+            if (diff > -NOISE_THRESHOLD && diff < NOISE_THRESHOLD)
+            {
+                prev_raw = raw;
+                vTaskDelay(pdMS_TO_TICKS(10));
+                continue;
+            }
+
+            if (diff < -THRESHOLD)
+                turns++;
+
+            else if (diff > THRESHOLD)
+                turns--;
+
+            prev_raw = raw;
+        }
+
+        int32_t angle_in_turn = (raw * 360) / 4096;
+
+        float total_angle = (float)(turns * 360 + angle_in_turn);
+
+        int32_t total_turns = turns;
+
+
+        xQueueOverwrite(queueRotarySensor, &total_angle);
+
+/*        int len = snprintf(
+            usb_buf,
+            sizeof(usb_buf),
+            "TOTAL=%ld deg | TURNS=%ld | IN_TURN=%ld deg\r\n",
+            total_angle,
+            total_turns,
+            angle_in_turn
+        );
+
+        while (CDC_Transmit_FS((uint8_t*)usb_buf, len) == USBD_BUSY)
+            HAL_Delay(10);*/
+
+        vTaskDelay(pdMS_TO_TICKS(20));
+
+
+    }
+
+
+	#endif
 
 }
 
@@ -368,6 +454,7 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM5_Init();
   MX_TIM1_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
   HCSR04_Init(&htim5);
@@ -493,6 +580,40 @@ void SystemClock_Config(void)
 
 
 /**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
   * @brief TIM1 Initialization Function
   * @param None
   * @retval None
@@ -511,7 +632,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 1399;
+  htim1.Init.Prescaler = 4799;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 99;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -664,6 +785,7 @@ static void MX_GPIO_Init(void)
 void StartDefaultTask(void *argument)
 {
   /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
   for(;;)
