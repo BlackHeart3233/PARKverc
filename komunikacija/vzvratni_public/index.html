@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <title>Unity Web Player | simulacija_test1</title>
@@ -45,67 +44,81 @@
     opacity: 0.8;
   }
   #brake-button:active { opacity: 1; }
+
+  #video-frame {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 960px;     
+  height: 544px;    
+  background: black;
+  z-index: 10;
+}
+
+#video-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+#fade-overlay {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 9999;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 1s ease-in-out;
+}
+
+#fade-overlay.fade-out {
+  opacity: 0;
+}
+
+
 </style>
 </head>
 <body>
+      <button id="goBtn" style="
+        position: fixed;
+        top: 450px;
+        right: 450px;
+        padding: 10px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        z-index: 10;
+    ">
+        Iskanje parkirnega mesta
+    </button>
+<div id="fade-overlay"></div>
 <div id="unity-container" class="unity-desktop">
-<canvas id="unity-canvas" tabindex="-1"></canvas>  <div id="unity-loading-bar">
+<canvas id="unity-canvas" width="1920" height="1080"></canvas>
+<div id="video-frame"></div>
+  
+<div id="unity-loading-bar">
     <div id="unity-progress-bar-empty">
       <div id="unity-progress-bar-full"></div>
     </div>
   </div>
 </div>
 
-<button id="brake-button">Brake</button>
 
 <div id="controls">
-  <button id="up">↑</button>
+  <!--<button id="up">↑</button>-->
   <button id="left">←</button>
-  <button id="down">↓</button>
+  <!--<button id="down">↓</button>-->
   <button id="right">→</button>
 </div>
-<body>
-    <button id="goBtn" style="
-    position: fixed;
-    top: 450px;
-    right: 200px;
-    padding: 10px 16px;
-    font-size: 14px;
-    cursor: pointer;
-    z-index: 10;
-">
-    Iskanje parkirnega mesta
-</button>
-  <style>
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-#unity-container {
-  width: 100%;
-  height: 100%;
-}
-
-#unity-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-</style>
 
 <script>
-var canvas = document.querySelector("#unity-canvas");
-var unityInstance;
-
-const goBtn = document.getElementById("goBtn");
+  const goBtn = document.getElementById("goBtn");
 
 goBtn.addEventListener("click", () => {
     window.location.href = "http://localhost:8000/stranski_public/"; 
 });
+var realTestJson = null;
+var canvas = document.querySelector("#unity-canvas");
+var unityInstance;
 
 function unityShowBanner(msg, type) {
   var warningBanner = document.querySelector("#unity-warning");
@@ -122,12 +135,12 @@ function unityShowBanner(msg, type) {
 }
 
 var buildUrl = "Build";
-var loaderUrl = buildUrl + "/web_sim_8.5.loader.js";
+var loaderUrl = buildUrl + "/web_sim_8.96.loader.js";
 var config = {
   arguments: [],
-  dataUrl: buildUrl + "/web_sim_8.5.data",
-  frameworkUrl: buildUrl + "/web_sim_8.5.framework.js",
-  codeUrl: buildUrl + "/web_sim_8.5.wasm",
+  dataUrl: buildUrl + "/web_sim_8.96.data",
+  frameworkUrl: buildUrl + "/web_sim_8.96.framework.js",
+  codeUrl: buildUrl + "/web_sim_8.96.wasm",
   streamingAssetsUrl: "StreamingAssets",
   companyName: "DefaultCompany",
   productName: "simulacija_test1",
@@ -135,6 +148,9 @@ var config = {
   showBanner: unityShowBanner,
 };
 
+
+  canvas.style.width = "1920px";
+  canvas.style.height = "1080px";
 
 
 
@@ -144,9 +160,53 @@ script.onload = () => {
   createUnityInstance(canvas, config, (progress) => {
     document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
   }).then((instance) => {
-    unityInstance = instance;
-    document.querySelector("#unity-loading-bar").style.display = "none";
-    
+  unityInstance = instance;
+  document.querySelector("#unity-loading-bar").style.display = "none";
+
+  let ws = new WebSocket("ws://192.168.89.218:8080");
+
+  ws.onopen = () => {
+    console.log("WS CONNECTED");
+    ws.send("WEB");
+  };
+
+ws.onmessage = (event) => {
+    let msg;
+
+    try {
+        msg = JSON.parse(event.data);
+    } catch (e) {
+        console.error("Ni JSON:", event.data);
+        return;
+    }
+
+        if (msg.json != null) {
+        setTimeout(() => {
+        console.log("Sending parking lines JSON to Unity");
+        unityInstance.SendMessage(
+                "ParkingLines",            
+                "ReceiveJsonFromJS",
+                  JSON.stringify(msg)
+              );
+            }, 500);
+        return;
+    }
+
+    if (msg.type === "IMAGE") {
+        // OZNAČENA SLIKA
+        img.src = "data:image/jpeg;base64," + msg.image;
+        return;
+    }
+
+    console.log("Neznan message:", msg);
+};
+
+
+
+
+  ws.onerror = (e) => console.error("WS ERROR", e);
+  ws.onclose = () => console.log("WS CLOSED");
+
 
     let horizontal = 0;
     let vertical = 0;
@@ -184,7 +244,7 @@ script.onload = () => {
       btn.addEventListener("touchend", pressEnd);
     });
 
-    ["up","down"].forEach(id => {
+    /*["up","down"].forEach(id => {
       const dir = (id=="up") ? 1 : -1;
       const btn = document.getElementById(id);
 
@@ -196,24 +256,35 @@ script.onload = () => {
       btn.addEventListener("mouseout", pressEnd);
       btn.addEventListener("touchstart", pressStart);
       btn.addEventListener("touchend", pressEnd);
-    });
+    });*/
 
-    const brakeBtn = document.getElementById('brake-button');
-    function sendBrake(isPressed) {
-      if(!unityInstance) return;
-      const json = JSON.stringify({ x: 0, y: 0, brake: isPressed });
-      unityInstance.SendMessage('avtek_test_volan_popravek', 'SetInput', json);
-    }
-    brakeBtn.addEventListener('mousedown', () => sendBrake(true));
-    brakeBtn.addEventListener('mouseup', () => sendBrake(false));
-    brakeBtn.addEventListener('touchstart', () => sendBrake(true));
-    brakeBtn.addEventListener('touchend', () => sendBrake(false));
+  
 
     setInterval(sendInput, 50);
 
   }).catch((message) => { alert(message); });
 };
 document.body.appendChild(script);
+
+
+const frameDiv = document.getElementById("video-frame");
+const img = document.createElement("img");
+frameDiv.appendChild(img);
+
+
+window.addEventListener("load", () => {
+  const overlay = document.getElementById("fade-overlay");
+
+  setTimeout(() => {
+    overlay.classList.add("fade-out");
+
+    setTimeout(() => {
+      overlay.remove();
+    }, 1000);
+
+  }, 1000);
+});
+
 </script>
 
 </body>

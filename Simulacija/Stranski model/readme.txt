@@ -1,0 +1,1 @@
+Celotna koda za stranski model
