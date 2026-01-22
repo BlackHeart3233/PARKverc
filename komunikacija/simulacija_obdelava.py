@@ -18,6 +18,30 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 import base64
+import serial
+import threading
+
+PORT = "COM3"
+BAUD = 115200
+
+ser = None
+
+try:
+    ser = serial.Serial(
+        port=PORT,
+        baudrate=BAUD,
+        timeout=1
+    )
+    print(f"[SERIAL] Connected to {PORT}")
+except serial.SerialException as e:
+    print(f"[SERIAL] WARNING: {PORT} not available ({e})")
+    ser = None
+
+
+latest_rot = None
+latest_dist = None
+serial_lock = threading.Lock()
+
 
 app = FastAPI()
 
@@ -173,15 +197,20 @@ async def broadcast(payload: dict):
 @app.websocket("/ws/producer")
 async def ws_producer(ws: WebSocket):
     await ws.accept()
+    print("rpi connected")
 
     try:
         while True:
-            msg = await ws.receive_text()
-            img_bytes = base64.b64decode(msg)
-            arr = np.frombuffer(img_bytes, np.uint8)
-            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-            if frame is None:
+            compressed: bytes = await ws.receive_bytes()
+
+            try:
+                gray = compressor.decompress(compressed)
+                gray = np.asarray(gray, dtype=np.uint8)
+            except Exception as e:
+                print("decompression failed:", e)
                 continue
+
+            frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
             result = stranski_model(frame)[0]
             annotated = result.plot()
@@ -208,12 +237,85 @@ async def ws_producer(ws: WebSocket):
                 })
 
             _, buf = cv2.imencode(".jpg", cv2.resize(annotated, (350, 230)))
-            image_b64 = base64.b64encode(buf.tobytes()).decode()
+            image_b64 = base64.b64encode(buf).decode()
 
             await broadcast({
                 "detections": detections,
                 "image": image_b64
             })
 
-    except Exception:
-        pass
+    except WebSocketDisconnect:
+        print("rpi disconnected")
+
+@app.websocket("/ws/rotate")
+async def ws_rotate(ws: WebSocket):
+    await ws.accept()
+    print("Rotate WS connected")
+
+    try:
+        while True:
+            msg = await ws.receive_text()
+
+            try:
+                deg = float(msg)
+            except ValueError:
+                await ws.send_text("ERROR: invalid number")
+                continue
+
+            if ser is None:
+                await ws.send_text("ERROR: Serial not available")
+                continue
+
+            cmd = f"ROTATE:{deg}\n"
+            ser.write(cmd.encode("ascii"))
+
+            await ws.send_text(f"OK: sent {deg}")
+
+    except WebSocketDisconnect:
+        print("Rotate WS disconnected")
+
+
+def rx_thread():
+    global latest_rot, latest_dist
+    
+    if ser is None:
+        print("[SERIAL] RX thread disabled (no serial)")
+        return
+
+    while True:
+        try:
+            line = ser.readline().decode("ascii", errors="ignore").strip()
+            if not line:
+                continue
+
+            # Example: "ROT:12.3 DIST:45.6"
+            parts = line.split()
+
+            rot = None
+            dist = None
+
+            for p in parts:
+                if p.startswith("ROT:"):
+                    rot = float(p.split(":")[1])
+                elif p.startswith("DIST:"):
+                    dist = float(p.split(":")[1])
+
+            if rot is not None and dist is not None:
+                print(f"  -> Rotary = {rot:.2f} deg | Distance = {dist:.2f} cm")
+
+
+            with serial_lock:
+                if rot is not None:
+                    latest_rot = rot
+                if dist is not None:
+                    latest_dist = dist
+
+        except Exception as e:
+            print("Serial RX error:", e)
+            break
+
+if ser is not None:
+    threading.Thread(target=rx_thread, daemon=True).start()
+else:
+    print("[SERIAL] RX thread not started (no serial)")
+
