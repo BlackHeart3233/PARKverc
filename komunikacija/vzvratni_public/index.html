@@ -163,7 +163,7 @@ script.onload = () => {
   unityInstance = instance;
   document.querySelector("#unity-loading-bar").style.display = "none";
 
-  let ws = new WebSocket("ws://localhost:8080");
+  let ws = new WebSocket("ws://localhost:8000/handler");
 
   ws.onopen = () => {
     console.log("WS CONNECTED");
@@ -180,26 +180,28 @@ ws.onmessage = (event) => {
         return;
     }
 
-        if (msg.json != null) {
-        setTimeout(() => {
-        console.log("Sending parking lines JSON to Unity");
-        unityInstance.SendMessage(
-                "ParkingLines",            
+    if (msg.type === "FRAME") {
+
+        if (msg.json) {
+            unityInstance.SendMessage(
+                "ParkingLines",
                 "ReceiveJsonFromJS",
-                  JSON.stringify(msg)
-              );
-            }, 500);
+                JSON.stringify(msg.json)
+            );
+        }
+        if (msg.image) {
+            img.src = "data:image/jpeg;base64," + msg.image;
+        }
         return;
     }
 
-    if (msg.type === "IMAGE") {
-        // OZNAČENA SLIKA
-        img.src = "data:image/jpeg;base64," + msg.image;
-        return;
-    }
-
+    if (msg.type === "SENZOR_DATA") {
+            const { Rotary, Distance } = msg;
+            console.log("ROT:", Rotary, "DIST:", Distance);
+            return;
+      }
     console.log("Neznan message:", msg);
-};
+}
 
 
 
