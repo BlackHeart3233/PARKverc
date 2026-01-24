@@ -1,7 +1,7 @@
 ../Core/Src/main.c:141:6:HAL_TIM_PeriodElapsedCallback	5
 ../Core/Src/main.c:169:9:deg_to_steps	1
 ../Core/Src/main.c:175:6:Task_Distance	3
-../Core/Src/main.c:214:6:Task_RotarySensor	2
+../Core/Src/main.c:214:6:Task_RotarySensor	7
 ../Core/Src/main.c:296:6:Task_StepperControl	1
 ../Core/Src/main.c:311:6:Task_Tx	6
 ../Core/Src/main.c:360:6:Task_Rx	3

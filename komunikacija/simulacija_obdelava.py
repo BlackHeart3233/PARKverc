@@ -21,7 +21,7 @@ import base64
 import serial
 import threading
 
-PORT = "COM3"
+PORT = "COM7"
 BAUD = 115200
 
 ser = None
