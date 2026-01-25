@@ -5,9 +5,10 @@ import compressor
 
 WS_URL = "ws://localhost:8000/ws/producer"
 VIDEO_PATH = "video2.mp4"
-FPS = 4
+FPS = 1.5
 DELAY = 1.0 / FPS
 
+IMAGE_PATH = "img_test.png"   # <-- put your image here
 
 async def send_video():
     cap = cv2.VideoCapture(VIDEO_PATH)
@@ -30,7 +31,7 @@ async def send_video():
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             # crop bottom 20%
-            valid_h = int(gray.shape[0] * 0.8)
+            valid_h = int(gray.shape[0])
             gray = gray[:valid_h, :]
 
             original_bytes = gray.nbytes
