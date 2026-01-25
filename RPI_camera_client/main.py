@@ -15,7 +15,7 @@ async def main():
 
     uri = "ws://192.168.50.243:8000/ws/camera"
     async with websockets.connect(uri, max_size=None) as ws:
-        print("Povezan na WebSocket server")
+        print("povezan na ws")
 
         while True:
             ret, frame = cap.read()

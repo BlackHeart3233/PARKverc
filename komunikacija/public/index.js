@@ -59,6 +59,15 @@ const modelLoadTimes = {};
 let lastFrameTime = performance.now();
 let frameTimes = [];
 
+const FRONT_X = 12;
+const BACK_X = 24;
+const MIN = 0;   // observed min left_to_right
+const MAX = 100;   // observed max left_to_right
+const INTERPOLATION_AMOUNT = 13;
+
+let canParkInvalid = false;
+let canParkDruzina = false;
+
 init();
 animate();
 
@@ -131,7 +140,7 @@ function init() {
     );
 
     ground.castShadow = false;
-    ground.receiveShadow = false;
+    ground.receiveShadow = true;
     ground.position.y = -2;
 
     ground.material.envMap = null;
@@ -191,18 +200,26 @@ function init() {
     }, 3000);
 }
 
-function preloadModel(mtl, obj, callback) {
+function preloadModel(mtl, objPath, callback) {
     const start = performance.now();
-
     const mtlLoader = new MTLLoader();
+
     mtlLoader.load(mtl, (materials) => {
         materials.preload();
-
         const objLoader = new OBJLoader();
         objLoader.setMaterials(materials);
 
-        objLoader.load(obj, (object) => {
-            object.traverse(child => {
+        objLoader.load(objPath, (object) => {
+            const box = new THREE.Box3().setFromObject(object);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+
+            object.position.sub(center);
+
+            const wrapper = new THREE.Group();
+            wrapper.add(object);
+
+            wrapper.traverse(child => {
                 if (child instanceof THREE.Mesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
@@ -210,12 +227,9 @@ function preloadModel(mtl, obj, callback) {
             });
 
             const end = performance.now();
-            const time = Math.round(end - start);
+            console.log(`[modelload time] ${objPath}: ${Math.round(end - start)} ms`);
 
-            modelLoadTimes[obj] = time;
-            console.log(`[modelload time] ${obj}: ${time} ms`);
-
-            callback(object);
+            callback(wrapper);
         });
     });
 }
@@ -247,6 +261,9 @@ function cloneObject(template) {
         child.material = new THREE.MeshLambertMaterial({
             color: child.material.color || 0xffffff
         });
+
+        child.castShadow = true;
+        child.receiveShadow = true;
     });
 
     scene.add(clone);
@@ -262,6 +279,7 @@ ws.onmessage = (msg) => {
         humans: 0,
         parkings: 0
     };
+    let canParkInCurrentFrame = false;
 
     const data = JSON.parse(msg.data);
     const detections = data.detections;
@@ -281,15 +299,26 @@ ws.onmessage = (msg) => {
     };
 
     detections.forEach(det => {
-        const zPos = THREE.MathUtils.lerp(-20, 20, det.left_to_right / 100);
-        let xPos = THREE.MathUtils.lerp(10, 30, det.down_to_up / 100);
-
         if (det.label === "Avtomobil" && carTemplate) {
+            const t = THREE.MathUtils.clamp(
+                (det.left_to_right - MIN) / (MAX - MIN),
+                0,
+                1
+            );
+
+            const zPos = THREE.MathUtils.lerp(-INTERPOLATION_AMOUNT, INTERPOLATION_AMOUNT, t);
+            let xPos;
+
             stats.cars++;
-            if (xPos > 22) xPos = 30;
+            if (det.depth_row === "front") {
+                xPos = FRONT_X;
+            } else {
+                xPos = BACK_X;
+            }
 
             const car = getFromPool("car", carTemplate);
             car.position.set(xPos, 0, zPos);
+
             if (isDarkMode && !car.userData.glowAdded) {
                 addCarGlow(car);
                 car.userData.glowAdded = true;
@@ -298,23 +327,66 @@ ws.onmessage = (msg) => {
         }
 
         if (det.label.toLowerCase().includes("lovek") && humanTemplate) {
+            const t = THREE.MathUtils.clamp(
+                (det.left_to_right - MIN) / (MAX - MIN),
+                0,
+                1
+            );
+
+            const zPos = THREE.MathUtils.lerp(-INTERPOLATION_AMOUNT, INTERPOLATION_AMOUNT, t);
+            let xPos;
             stats.humans++;
 
             const human = getFromPool("human", humanTemplate);
+            if (det.depth_row === "front") {
+                xPos = FRONT_X;
+            } else {
+                xPos = BACK_X;
+            }
+
             human.position.set(xPos, 0, zPos);
             used.human.add(human);
         }
 
         if (det.label.toLowerCase().includes("steber") && wallTemplate) {
+            const t = THREE.MathUtils.clamp(
+                (det.left_to_right - MIN) / (MAX - MIN),
+                0,
+                1
+            );
+
+            const zPos = THREE.MathUtils.lerp(-INTERPOLATION_AMOUNT, INTERPOLATION_AMOUNT, t);
+            let xPos;
+            console.log('steber zPos', zPos)
+
             const wall = getFromPool("wall", wallTemplate);
+            if (det.depth_row === "front") {
+                xPos = FRONT_X;
+            } else {
+                xPos = BACK_X;
+            }
+
             wall.position.set(xPos, 0, zPos);
             used.wall.add(wall);
         }
 
+
         if (det.label.toLowerCase().includes("parki") && parkingTemplate) {
+            const t = THREE.MathUtils.clamp(
+                (det.left_to_right - MIN) / (MAX - MIN),
+                0,
+                1
+            );
+
+            const zPos = THREE.MathUtils.lerp(-INTERPOLATION_AMOUNT, INTERPOLATION_AMOUNT, t);
+            console.log('parking zPos', zPos)
+            let xPos;
+
             stats.parkings ++;
             const p = getFromPool("parking", parkingTemplate);
-            p.position.set(10, 0, zPos);
+
+            xPos = FRONT_X;
+            p.position.set(xPos, 0, zPos);
 
             const label = det.label.toLowerCase();
 
@@ -333,8 +405,29 @@ ws.onmessage = (msg) => {
                 p.userData.glowAdded = true;
             }
             used.parking.add(p);
+
+            let isSpotLegal = true;
+
+            if (label.includes("valid") && !canParkInvalid) {
+                isSpotLegal = false;
+            } else if (label.includes("dru") && !canParkDruzina) {
+                isSpotLegal = false;
+            }
+
+            if (isSpotLegal) {
+                canParkInCurrentFrame = true;
+            }
         }
     });
+
+    const border = document.getElementById("status-border");
+    if (stats.parkings === 0) {
+        border.style.borderColor = "transparent";
+    } else if (canParkInCurrentFrame) {
+        border.style.borderColor = "#00ff66";
+    } else {
+        border.style.borderColor = "#ff0000";
+    }
 
     releaseUnused(pools.car, used.car);
     releaseUnused(pools.human, used.human);
@@ -672,6 +765,17 @@ function lightMode() {
     );
     sky.material.uniforms.sunPosition.value.copy(sun);
     stars.visible = false;
+
+    ["car", "parking"].forEach(type => {
+        pools[type].forEach(obj => {
+            if (!obj.visible) return;
+            removeParkingGlow(obj);
+            obj.userData.glowAdded = false;
+        });
+    });
+
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 }
 
 function toggleMode() {
@@ -899,3 +1003,17 @@ const goBtn = document.getElementById("goBtn");
 goBtn.addEventListener("click", () => {
     window.location.href = "http://localhost:8000/vzvratni_public/"; 
 });
+
+// UI Logic for Dropdown
+document.getElementById('settings-icon').onclick = () => {
+    const dropdown = document.getElementById('settings-dropdown');
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+};
+
+document.getElementById('allow-invalid').onchange = (e) => {
+    canParkInvalid = e.target.checked;
+};
+
+document.getElementById('allow-druzina').onchange = (e) => {
+    canParkDruzina = e.target.checked;
+};

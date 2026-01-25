@@ -409,8 +409,26 @@ async def ws_producer(ws: WebSocket):
                 cls = int(box.cls[0])
                 conf = float(box.conf[0])
 
+                if conf < 0.25:
+                    continue
+
                 cx = (x1 + x2) / 2
                 cy = (y1 + y2) / 2
+
+                # izboljšave
+                height_ratio = (y2 - y1) / h
+                bottom_ratio = y2 / h
+
+                if height_ratio < 0.15:
+                    continue
+
+                if height_ratio < 0.25:
+                    row = "back"
+                else:
+                    if bottom_ratio >= 0.65:
+                        row = "front"
+                    else:
+                        row = "back"
 
                 detections.append({
                     "label": stranski_model.names[cls],
@@ -420,6 +438,7 @@ async def ws_producer(ws: WebSocket):
                     "down_to_up": 100 - max(0, min(100, (cy / h) * 100)),
                     "coordinates": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                     "size": {"width": x2 - x1, "height": y2 - y1},
+                    "depth_row": row
                 })
 
             _, buf = cv2.imencode(".jpg", cv2.resize(annotated, (350, 230)))
@@ -511,3 +530,37 @@ if ser is not None:
 else:
     print("[SERIAL] RX thread not started (no serial)")
 
+
+def iou(boxA, boxB):
+    xA = max(boxA["x1"], boxB["x1"])
+    yA = max(boxA["y1"], boxB["y1"])
+    xB = min(boxA["x2"], boxB["x2"])
+    yB = min(boxA["y2"], boxB["y2"])
+
+    interW = max(0, xB - xA)
+    interH = max(0, yB - yA)
+    interArea = interW * interH
+
+    if interArea == 0:
+        return 0.0
+
+    boxAArea = (boxA["x2"] - boxA["x1"]) * (boxA["y2"] - boxA["y1"])
+    boxBArea = (boxB["x2"] - boxB["x1"]) * (boxB["y2"] - boxB["y1"])
+
+    return interArea / float(boxAArea + boxBArea - interArea)
+
+def suppress_duplicates(detections, iou_thresh=0.6):
+    detections = sorted(detections, key=lambda d: d["confidence"], reverse=True)
+    kept = []
+
+    for det in detections:
+        duplicate = False
+        for k in kept:
+            if det["label"] == k["label"]:
+                if iou(det["coordinates"], k["coordinates"]) > iou_thresh:
+                    duplicate = True
+                    break
+        if not duplicate:
+            kept.append(det)
+
+    return kept

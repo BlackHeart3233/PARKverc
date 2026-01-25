@@ -20,17 +20,44 @@
     <meta charset="UTF-8">
 </head>
 <body>
-    <button id="goBtn" style="
-        position: fixed;
-        top: 900px;
-        right: 870px;
-        padding: 15px 21px;
-        font-size: 30px;
-        cursor: pointer;
-        z-index: 10;
-    ">
-        Začetek parkiranja
-    </button>
+<div id="status-border" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    border: 15px solid transparent;
+    box-sizing: border-box;
+    pointer-events: none;
+    z-index: 9999;
+    transition: border-color 0.3s ease;
+"></div>
+
+<div id="settings-container" style="position: fixed; top: 10px; right: 10px; z-index: 2000; font-family: monospace;">
+    <div id="settings-icon" style="cursor: pointer; font-size: 30px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 5px; color: white; text-align: center;">
+        ⚙️
+    </div>
+    <div id="settings-dropdown" style="display: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; color: #00ffcc; margin-top: 10px; min-width: 220px; border: 1px solid #00ffcc;">
+        <div style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #444;">DOVOLJENJA</div>
+        <label style="display: block; cursor: pointer; margin-bottom: 8px;">
+            <input type="checkbox" id="allow-invalid"> Invalidsko mesto
+        </label>
+        <label style="display: block; cursor: pointer;">
+            <input type="checkbox" id="allow-druzina"> Družinsko mesto
+        </label>
+    </div>
+</div>
+<button id="goBtn" style="
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    padding: 12px;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 10;
+">
+    Začetek parkiranja
+</button>
 <div id="hud">
     <div>Mode: <span id="hud-mode">Day</span></div>
     <div>Cars: <span id="hud-cars">0</span></div>
