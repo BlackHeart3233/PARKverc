@@ -33,7 +33,7 @@ za pravilno delovanje strani modela je potrebno zagnati producer.py
 in reload site
 """
 
-PORT = "COM7"
+PORT = "COM6"
 BAUD = 115200
 
 ser = None

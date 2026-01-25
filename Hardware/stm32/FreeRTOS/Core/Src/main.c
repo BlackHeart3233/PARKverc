@@ -66,7 +66,7 @@ const osThreadAttr_t defaultTask_attributes = {
 
 volatile int32_t current_pos = 0;
 #define DISTANCE_MOCK   1   //1 = mock, 0 = real senzor
-#define ROTATION_SENZOR_MOCK   0   //1 = mock, 0 = real senzor
+#define ROTATION_SENZOR_MOCK   1   //1 = mock, 0 = real senzor
 
 volatile int32_t target_pos  = 0;
 
