@@ -1,19 +1,13 @@
 import asyncio
 import websockets
-import os
+import cv2
 import json
 import base64
-import re
+import time
 
-IMAGE_DIR = r"C:/Users/konjc/OneDrive - Univerza v Mariboru/PARKverc/MERITVE/Meritve_2/Video/Frames_video/IMG_4904"
-DELAY_MS = 200  # ms
+VIDEO_PATH = r"IMG_4905.MP4"
+DELAY_MS = 200
 WS_URL = "ws://localhost:8000/handler"
-
-
-def extract_number(filename: str) -> int:
-    """Izlušči prvo številko iz imena datoteke (za sortiranje)"""
-    m = re.search(r"\d+", filename)
-    return int(m.group()) if m else 0
 
 
 async def sensor_client():
@@ -23,38 +17,43 @@ async def sensor_client():
         # identifikacija
         await ws.send("SENZOR")
 
-        files = os.listdir(IMAGE_DIR)
-        files = [
-            f for f in files
-            if f.lower().endswith((".jpg", ".jpeg", ".png"))
-        ]
+        cap = cv2.VideoCapture(VIDEO_PATH)
+        if not cap.isOpened():
+            print("Ne morem odpret videa")
+            return
 
-        files.sort(key=extract_number)
+        frame_idx = 0
 
-        print("Najdenih slik:", len(files))
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        for file in files:
-            file_path = os.path.join(IMAGE_DIR, file)
-            print("Pošiljam:", file)
+            frame_idx += 1
 
-            with open(file_path, "rb") as f:
-                image_bytes = f.read()
+            # JPEG encode
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            ok, buffer = cv2.imencode(".jpg", frame, encode_param)
+            if not ok:
+                continue
 
-            base64_data = base64.b64encode(image_bytes).decode("utf-8")
+            base64_data = base64.b64encode(buffer).decode("utf-8")
 
             payload = {
                 "type": "KAMERA",
                 "data": base64_data,
-                "filename": file
+                "frame": frame_idx
             }
 
             await ws.send(json.dumps(payload))
+            print(f"Poslan frame {frame_idx}")
 
             await asyncio.sleep(DELAY_MS / 1000)
 
-        print("Vse slike poslane")
+        cap.release()
+        print("Video poslan")
 
-        # če hočeš še poslušat odgovore
+        # poslušanje odgovorov (opcijsko)
         try:
             async for msg in ws:
                 print("Odgovor strežnika:", msg)

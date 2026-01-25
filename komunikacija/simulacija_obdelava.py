@@ -33,8 +33,9 @@ za pravilno delovanje strani modela je potrebno zagnati producer.py
 in reload site
 """
 
-PORT = "COM6"
+PORT = "COM7"
 BAUD = 115200
+SEND_TO_NEMMA = False
 
 ser = None
 
@@ -123,15 +124,21 @@ async def handler(socket: WebSocket):
                     continue
 
                 compressed_bytes = base64.b64decode(obj["data"])
-                print("Prejet KAMERA frame:", len(compressed_bytes), "bytes")
+                #print("Prejet KAMERA frame:", len(compressed_bytes), "bytes")
                 result = obdelaj_sliko(compressed_bytes)
 
                 if web_socket:
                     await web_socket.send_text(json.dumps({
                         "type": "FRAME",
-                        "json": result["json"],
-                        "image": result["image"]
+                        "json": {
+                            "json": result["json"]
+                        },
+                        "image": result["image"],
+                        "rotation": result["rotation"]
                     }))
+                    #print("ROTATION:", result["rotation"])
+                    if SEND_TO_NEMMA:
+                        ws_rotate(result["rotation"])
                 else:
                     print("WEB ni povezan")
 
@@ -166,16 +173,23 @@ async def send_sensor_loop():
         if rot is None or dist is None:
             continue
 
-        if (rot, dist) == last_sent:
-            continue
+        """if (rot, dist) == last_sent:
+            continue"""
+        print("Sending sensor data: ROTARY =", rot, "DISTANCE =", dist)
+
 
         last_sent = (rot, dist)
         try:
+            if rot > 540:
+                rot = 540
+            if rot < -540:
+                rot = -540
             await web_socket.send_text(json.dumps({
                 "type": "SENZOR_DATA",
                 "Rotary": round(rot, 2),
                 "Distance": round(dist, 2)
             }))
+                
         except Exception:
             pass
 
@@ -187,42 +201,52 @@ async def startup():
     asyncio.create_task(send_sensor_loop())
 
 
+#za rotacijo
+MAX_OFFSET = 150
+MAX_ROTATION = 540
+
+ACTIVE_ZONE_HALF_WIDTH = 180
+DEAD_ZONE = 8
+
+MIN_STEP = 2
+MAX_STEP = 20
+
+CONFIDENCE_MAX = 5
+CONFIDENCE_THRESHOLD = 3
+SAME_LINE_TOL = 60
+
+current_offset = 0
+last_candidate_x = None
+confidence = 0
 
 
-
-
+def offset_to_rotation(offset, max_offset=150, max_rotation=540):
+    offset = np.clip(offset, -max_offset, max_offset)
+    return (offset / max_offset) * max_rotation
 
 def obdelaj_sliko(compressed: bytes) -> dict:
+    global current_offset, last_candidate_x, confidence
+
     data = {"lines": []}
 
     if not compressed:
         return {"error": "empty body"}
 
-    #posiljam barvne slike 
     arr = np.frombuffer(compressed, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
-
     if img is None:
-        return {"error": "invalid image"}    
+        return {"error": "invalid image"}
 
-    ts = int(time.time() * 1000)
-    original_path = os.path.join(DEBUG_DIR, f"{ts}_original.jpg")
-    cv2.imwrite(original_path, img)
-
-    """
-    try:
-        gray = compressor.decompress(compressed)
-        gray = np.asarray(gray, dtype=np.uint8)
-    except Exception as e:
-        print("DECOMPRESS ERROR:", e)
-        return {"error": "decompress failed"}
-
-    img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    """
+    h, w = img.shape[:2]
+    ref_x = w // 2
 
     result = model(img, verbose=False, conf=0.6)[0]
+    candidates = []
 
+    # ===============================
+    # OBB DETEKCIJE
+    # ===============================
     if result.obb is not None:
         for i, obb_data_row in enumerate(result.obb.xywhr):
             cls_id = int(result.obb.cls[i].item())
@@ -233,6 +257,8 @@ def obdelaj_sliko(compressed: bytes) -> dict:
                 obb_data_row[j].item() for j in range(5)
             ]
 
+            candidates.append((x_center, y_center))
+
             box = (
                 (x_center, y_center),
                 (width, height),
@@ -242,29 +268,67 @@ def obdelaj_sliko(compressed: bytes) -> dict:
             box_pts = cv2.boxPoints(box)
             box_pts = np.intp(box_pts)
 
-            cv2.polylines(
-                img,
-                [box_pts],
-                isClosed=True,
-                color=(0, 255, 0),
-                thickness=2
-            )
+            cv2.polylines(img, [box_pts], True, (0, 255, 0), 2)
 
-            coords_list = box_pts.tolist()
             data["lines"].append({
                 "corners": [
-                    {"x": int(x), "y": int(y)} for x, y in coords_list
+                    {"x": int(x), "y": int(y)} for x, y in box_pts.tolist()
                 ]
             })
 
+    # ===============================
+    # OFFSET → ROTATION
+    # ===============================
+    target_offset = 0
+
+    if candidates:
+        candidate_x, candidate_y = min(
+            candidates,
+            key=lambda p: abs(p[0] - ref_x) + 0.3 * abs(p[1] - h)
+        )
+
+        if last_candidate_x is None or abs(candidate_x - last_candidate_x) < SAME_LINE_TOL:
+            confidence = min(CONFIDENCE_MAX, confidence + 1)
+        else:
+            confidence = max(0, confidence - 1)
+
+        last_candidate_x = candidate_x
+
+        if confidence >= CONFIDENCE_THRESHOLD:
+            if abs(candidate_x - ref_x) <= ACTIVE_ZONE_HALF_WIDTH:
+                target_offset = 0
+            else:
+                target_offset = np.clip(candidate_x - ref_x, -MAX_OFFSET, MAX_OFFSET)
+    else:
+        confidence = 0
+
+    if abs(target_offset) < DEAD_ZONE:
+        target_offset = 0
+
+    error = target_offset - current_offset
+    step = int(np.clip(abs(error) * 0.2, MIN_STEP, MAX_STEP))
+
+    if current_offset < target_offset:
+        current_offset = min(current_offset + step, target_offset)
+    elif current_offset > target_offset:
+        current_offset = max(current_offset - step, target_offset)
+
+    offset = int(current_offset)
+    rotation = offset_to_rotation(offset, MAX_OFFSET, MAX_ROTATION)
+
+    # ===============================
+    # ENCODE IMAGE + RETURN
+    # ===============================
     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
     _, buffer = cv2.imencode(".jpg", img, encode_param)
     img_b64 = base64.b64encode(buffer).decode("utf-8")
 
     return {
         "json": data,
-        "image": img_b64   
+        "image": img_b64,
+        "rotation": rotation
     }
+
 
 
 
@@ -371,32 +435,38 @@ async def ws_producer(ws: WebSocket):
 
 #STM32
 
-@app.websocket("/ws/rotate")
-async def ws_rotate(ws: WebSocket):
+@app.websocket("/aiAssistentOn")
+async def ws_aiAssistentOn(ws: WebSocket):
+    global SEND_TO_NEMMA
     await ws.accept()
-    print("Rotate WS connected")
 
     try:
         while True:
-            msg = await ws.receive_text()
-
-            try:
-                deg = float(msg)
-            except ValueError:
-                await ws.send_text("ERROR: invalid number")
-                continue
-
-            if ser is None:
-                await ws.send_text("ERROR: Serial not available")
-                continue
-
-            cmd = f"ROTATE:{deg}\n"
-            ser.write(cmd.encode("ascii"))
-
-            await ws.send_text(f"OK: sent {deg}")
+            choice = await ws.receive_text()
+            SEND_TO_NEMMA = (choice.lower() == "true")
+            print("SEND_TO_NEMMA =", SEND_TO_NEMMA)
 
     except WebSocketDisconnect:
-        print("Rotate WS disconnected")
+        print("AI assistant toggle disconnected")
+
+
+
+def ws_rotate(rotate):
+    try:
+        deg = float(rotate)
+    except (ValueError, TypeError):
+        print("ERROR: invalid rotate value:", rotate)
+        return
+
+    if ser is None:
+        print("ERROR: Serial not available")
+        return
+
+    cmd = f"ROTATE:{deg}\n"
+    print("Sending to NEMMA:", cmd.strip())
+    ser.write(cmd.encode("ascii"))
+
+
 
 def rx_thread():
     global latest_rot, latest_dist

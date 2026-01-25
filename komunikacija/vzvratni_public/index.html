@@ -186,6 +186,16 @@ assistBtn.addEventListener("click", () => {
     : "Assisted Parking: OFF";
 
   assistBtn.style.background = assistedMode ? "#e67e22" : "#2ecc71";
+
+  let ws = new WebSocket("ws://localhost:8000/aiAssistentOn");
+
+  ws.onopen = () => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(assistedMode);
+      ws.close(1000);
+    }
+  };
+
 });
 
 
@@ -327,14 +337,23 @@ ws.onmessage = (event) => {
         if (msg.image) {
             img.src = "data:image/jpeg;base64," + msg.image;
         }
+        if(msg.rotation !== undefined && assistedMode) {
+            const angle = msg.rotation;
+            handleNewOffset(angle);
+            console.log("assistedMode:", Rotary);
+
+        }
         return;
     }
 
     if (msg.type === "SENZOR_DATA") {
             const { Rotary, Distance } = msg;
-            console.log("ROT:", Rotary, "DIST:", Distance);
+            //console.log("ROT:", Rotary, "DIST:", Distance);
             updateDistanceFrame(Distance);
-            handleNewOffset(Rotary);
+            if(!assistedMode){
+                handleNewOffset(Rotary);
+                console.log("NO:", Rotary);
+            }
             return;
       }
     console.log("Neznan message:", msg);
@@ -370,7 +389,6 @@ function offsetToSignedTime(offset) {
 
 
 function handleNewOffset(newOffset) {
-  if (!assistedMode) return;
   if (steerTimeout) return;
 
   const prevTime = offsetToSignedTime(lastOffset);

@@ -17,7 +17,8 @@ PARKING_LINE_CLASS_ID = 7
 MAX_OFFSET = 150
 MAX_ROTATION = 540
 
-ACTIVE_ZONE_HALF_WIDTH = 180   # ±100 px → VOLAN RAVEN
+IGNORE_LEFT_RATIO = 0.70        # ❌ ignoriraj vse črte levo od 35% širine slike
+ACTIVE_ZONE_HALF_WIDTH = 300    # ±100 px → VOLAN RAVEN
 
 DEAD_ZONE = 8
 MIN_STEP = 2
@@ -40,7 +41,7 @@ def offset_to_rotation(offset, max_offset=150, max_rotation=540):
 # MAIN
 # ===============================
 def main():
-    cap = cv2.VideoCapture("IMG_4905.mp4")
+    cap = cv2.VideoCapture("IMG_4904.mp4")
 
     current_offset = 0
     last_candidate_x = None
@@ -53,6 +54,7 @@ def main():
 
         h, w = frame.shape[:2]
         ref_x = w // 2
+        ignore_left_x = int(w * IGNORE_LEFT_RATIO)
 
         result = model(frame, verbose=False, conf=0.6)[0]
 
@@ -71,6 +73,10 @@ def main():
                     obb[j].item() for j in range(5)
                 ]
 
+                # ❌ IGNORE LEFT LINE
+                if x < ignore_left_x:
+                    continue
+
                 candidates.append((x, y))
 
                 # 🟩 OBB debug
@@ -80,7 +86,7 @@ def main():
                 cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
 
         # ===============================
-        # IZBIRA CILJNE ČRTE (OBRATNA LOGIKA)
+        # IZBIRA CILJNE ČRTE
         # ===============================
         target_offset = 0
 
@@ -98,26 +104,25 @@ def main():
             last_candidate_x = candidate_x
 
             if confidence >= CONFIDENCE_THRESHOLD:
-
-                # 🔁 KLJUČ: ACTIVE ZONE = NO STEERING
                 if abs(candidate_x - ref_x) <= ACTIVE_ZONE_HALF_WIDTH:
                     target_offset = 0
                 else:
                     target_offset = candidate_x - ref_x
-                    target_offset = np.clip(target_offset, -MAX_OFFSET, MAX_OFFSET)
-
+                    target_offset = np.clip(
+                        target_offset, -MAX_OFFSET, MAX_OFFSET
+                    )
         else:
-            target_offset = 0
             confidence = 0
+            target_offset = 0
 
         # ===============================
-        # DEAD ZONE (še dodatna stabilnost)
+        # DEAD ZONE
         # ===============================
         if abs(target_offset) < DEAD_ZONE:
             target_offset = 0
 
         # ===============================
-        # DINAMIČNI STEP + RAMPANJE
+        # RAMPANJE
         # ===============================
         error = target_offset - current_offset
         step = int(np.clip(abs(error) * 0.2, MIN_STEP, MAX_STEP))
@@ -134,24 +139,34 @@ def main():
         # RISANJE
         # ===============================
 
-        # 🟨 SREDINA
+        # 🟨 CENTER
         cv2.line(frame, (ref_x, 0), (ref_x, h), (255, 255, 0), 2)
 
-        # 🔴 ACTIVE ZONE (NO STEERING)
+        # 🔴 ACTIVE ZONE
         cv2.line(frame, (ref_x - ACTIVE_ZONE_HALF_WIDTH, 0),
                  (ref_x - ACTIVE_ZONE_HALF_WIDTH, h), (0, 0, 255), 2)
         cv2.line(frame, (ref_x + ACTIVE_ZONE_HALF_WIDTH, 0),
                  (ref_x + ACTIVE_ZONE_HALF_WIDTH, h), (0, 0, 255), 2)
 
-        cv2.putText(frame, "NO STEERING ZONE",
-                    (ref_x - ACTIVE_ZONE_HALF_WIDTH + 5, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        cv2.putText(
+            frame, "NO STEERING ZONE",
+            (ref_x - ACTIVE_ZONE_HALF_WIDTH + 5, 30),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2
+        )
 
-        # 🟦 uporabljena črta
+        # 🟪 IGNORE LEFT ZONE (ENAK STIL KOT ACTIVE ZONE)
+        cv2.line(frame, (ignore_left_x, 0), (ignore_left_x, h), (255, 0, 255), 2)
+        cv2.putText(
+            frame, "IGNORE LEFT",
+            (ignore_left_x + 5, 60),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2
+        )
+
+        # 🟦 IZBRANA ČRTA
         chosen_x = int(ref_x + offset)
         cv2.line(frame, (chosen_x, 0), (chosen_x, h), (255, 0, 0), 2)
 
-        # 🔴 puščica
+        # 🔴 PUŠČICA
         cv2.arrowedLine(
             frame,
             (ref_x, h // 2),
@@ -173,7 +188,7 @@ def main():
         cv2.putText(frame, f"CONFIDENCE: {confidence}", (30, 120),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (200, 200, 200), 2)
 
-        cv2.imshow("PARK ASSIST – OUTSIDE ZONE STEERING", frame)
+        cv2.imshow("PARK ASSIST – IGNORE LEFT LINE", frame)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
