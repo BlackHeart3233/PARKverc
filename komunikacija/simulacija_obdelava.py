@@ -17,7 +17,43 @@ from typing import Set
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
+import serial
 import base64
+import httpx
+"""
+Pred zagonom preveri PORT in ga spremeni glede na STM32.
+Nato zaženi s pomočjo ukaza:
+python -m uvicorn simulacija_obdelava:app --reload --host 0.0.0.0 --port 8000
+
+zadnji model: http://localhost:8000/vzvratni_public/
+za pravilno delovanje zadnjega zazeni se client.py v katerem preveri folder s frame slikami
+
+stranski model: http://localhost:8000/stranski_public/
+za pravilno delovanje strani modela je potrebno zagnati producer.py
+in reload site
+"""
+
+PORT = "COM6"
+BAUD = 115200
+
+ser = None
+
+try:
+    ser = serial.Serial(
+        port=PORT,
+        baudrate=BAUD,
+        timeout=1
+    )
+    print(f"[SERIAL] Connected to {PORT}")
+except serial.SerialException as e:
+    print(f"[SERIAL] WARNING: {PORT} not available ({e})")
+    ser = None
+
+
+latest_rot = None
+latest_dist = None
+serial_lock = threading.Lock()
+
 
 app = FastAPI()
 
@@ -36,19 +72,129 @@ app.mount(
 
 DEBUG_DIR = "debug"
 os.makedirs(DEBUG_DIR, exist_ok=True)
-#python -m uvicorn simulacija_obdelava:app --reload --host 0.0.0.0 --port 8000
 
 #VZRATNI MODEL
 model = YOLO("https://huggingface.co/ParkVerc/model_s_crtami/resolve/main/best.pt")
 PARKING_LINE_CLASS_ID = 7
 
-@app.post("/obdelaj_sliko")
-async def obdelaj_sliko(request: Request):
-    global latest_frame
 
+sensor_socket: WebSocket | None = None
+web_socket: WebSocket | None = None
+
+
+#glavni server
+
+@app.websocket("/handler")
+async def handler(socket: WebSocket):
+    global sensor_socket, web_socket
+    await socket.accept()
+    print("Client povezan")
+
+    try:
+        while True:
+            msg = await socket.receive()
+
+            if msg.get("text") is not None:
+                text = msg["text"]
+            elif msg.get("bytes") is not None:
+                text = msg["bytes"].decode("utf-8")
+            else:
+                continue
+
+            try:
+                obj = json.loads(text)
+            except json.JSONDecodeError:
+                if text == "WEB":
+                    web_socket = socket
+                    print("WEB povezan")
+                    continue
+
+                if text == "SENZOR":
+                    sensor_socket = socket
+                    print("SENZOR povezan")
+                    continue
+
+                print("Neznan tekst:", text)
+                continue
+
+            if obj.get("type") == "KAMERA":
+                if not obj.get("data"):
+                    print("KAMERA brez data")
+                    continue
+
+                compressed_bytes = base64.b64decode(obj["data"])
+                print("Prejet KAMERA frame:", len(compressed_bytes), "bytes")
+                result = obdelaj_sliko(compressed_bytes)
+
+                if web_socket:
+                    await web_socket.send_text(json.dumps({
+                        "type": "FRAME",
+                        "json": result["json"],
+                        "image": result["image"]
+                    }))
+                else:
+                    print("WEB ni povezan")
+
+
+    except WebSocketDisconnect:
+        print("Client odklopljen")
+
+    finally:
+        if socket == web_socket:
+            web_socket = None
+            print("WEB odklopljen")
+
+        if socket == sensor_socket:
+            sensor_socket = None
+            print("SENZOR odklopljen")
+
+
+last_sent = (None, None)
+
+async def send_sensor_loop():
+    global last_sent
+    while True:
+        await asyncio.sleep(0.1)
+
+        if web_socket is None:
+            continue
+
+        with serial_lock:
+            rot = latest_rot
+            dist = latest_dist
+
+        if rot is None or dist is None:
+            continue
+
+        if (rot, dist) == last_sent:
+            continue
+
+        last_sent = (rot, dist)
+        try:
+            await web_socket.send_text(json.dumps({
+                "type": "SENZOR_DATA",
+                "Rotary": round(rot, 2),
+                "Distance": round(dist, 2)
+            }))
+        except Exception:
+            pass
+
+
+
+#zagon posiljanja senzorja
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(send_sensor_loop())
+
+
+
+
+
+
+
+def obdelaj_sliko(compressed: bytes) -> dict:
     data = {"lines": []}
 
-    compressed = await request.body()
     if not compressed:
         return {"error": "empty body"}
 
@@ -117,7 +263,7 @@ async def obdelaj_sliko(request: Request):
 
     return {
         "json": data,
-        "image": img_b64   # <-- dodano
+        "image": img_b64   
     }
 
 
@@ -173,15 +319,20 @@ async def broadcast(payload: dict):
 @app.websocket("/ws/producer")
 async def ws_producer(ws: WebSocket):
     await ws.accept()
+    print("rpi connected")
 
     try:
         while True:
-            msg = await ws.receive_text()
-            img_bytes = base64.b64decode(msg)
-            arr = np.frombuffer(img_bytes, np.uint8)
-            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-            if frame is None:
+            compressed: bytes = await ws.receive_bytes()
+
+            try:
+                gray = compressor.decompress(compressed)
+                gray = np.asarray(gray, dtype=np.uint8)
+            except Exception as e:
+                print("decompression failed:", e)
                 continue
+
+            frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
             result = stranski_model(frame)[0]
             annotated = result.plot()
@@ -208,12 +359,85 @@ async def ws_producer(ws: WebSocket):
                 })
 
             _, buf = cv2.imencode(".jpg", cv2.resize(annotated, (350, 230)))
-            image_b64 = base64.b64encode(buf.tobytes()).decode()
+            image_b64 = base64.b64encode(buf).decode()
 
             await broadcast({
                 "detections": detections,
                 "image": image_b64
             })
 
-    except Exception:
-        pass
+    except WebSocketDisconnect:
+        print("rpi disconnected")
+
+#STM32
+
+@app.websocket("/ws/rotate")
+async def ws_rotate(ws: WebSocket):
+    await ws.accept()
+    print("Rotate WS connected")
+
+    try:
+        while True:
+            msg = await ws.receive_text()
+
+            try:
+                deg = float(msg)
+            except ValueError:
+                await ws.send_text("ERROR: invalid number")
+                continue
+
+            if ser is None:
+                await ws.send_text("ERROR: Serial not available")
+                continue
+
+            cmd = f"ROTATE:{deg}\n"
+            ser.write(cmd.encode("ascii"))
+
+            await ws.send_text(f"OK: sent {deg}")
+
+    except WebSocketDisconnect:
+        print("Rotate WS disconnected")
+
+def rx_thread():
+    global latest_rot, latest_dist
+    
+    if ser is None:
+        print("[SERIAL] RX thread disabled (no serial)")
+        return
+
+    while True:
+        try:
+            line = ser.readline().decode("ascii", errors="ignore").strip()
+            if not line:
+                continue
+
+            # Example: "ROT:12.3 DIST:45.6"
+            parts = line.split()
+
+            rot = None
+            dist = None
+
+            for p in parts:
+                if p.startswith("ROT:"):
+                    rot = float(p.split(":")[1])
+                elif p.startswith("DIST:"):
+                    dist = float(p.split(":")[1])
+
+            if rot is not None and dist is not None:
+                print(f"  -> Rotary = {rot:.2f} deg | Distance = {dist:.2f} cm")
+
+            with serial_lock:
+                if rot is not None:
+                    latest_rot = rot
+                if dist is not None:
+                    latest_dist = dist
+
+        except Exception as e:
+            print("Serial RX error:", e)
+            break
+
+if ser is not None:
+    threading.Thread(target=rx_thread, daemon=True).start()
+else:
+    print("[SERIAL] RX thread not started (no serial)")
+

@@ -1640,7 +1640,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  800120a:	429a      	cmp	r2, r3
  800120c:	d103      	bne.n	8001216 <HAL_TIM_PeriodElapsedCallback+0x26>
     {
-        HAL_TIM_Base_Stop_IT(&htim1);   // STOP TIMER = STOP MOTOR
+        HAL_TIM_Base_Stop_IT(&htim1);
  800120e:	481f      	ldr	r0, [pc, #124]	@ (800128c <HAL_TIM_PeriodElapsedCallback+0x9c>)
  8001210:	f003 fab4 	bl	800477c <HAL_TIM_Base_Stop_IT>
         return;
@@ -2601,9 +2601,9 @@ static void MX_TIM1_Init(void)
  800182e:	4b1b      	ldr	r3, [pc, #108]	@ (800189c <MX_TIM1_Init+0x98>)
  8001830:	2200      	movs	r2, #0
  8001832:	609a      	str	r2, [r3, #8]
-  htim1.Init.Period = 66;
+  htim1.Init.Period = 99;
  8001834:	4b19      	ldr	r3, [pc, #100]	@ (800189c <MX_TIM1_Init+0x98>)
- 8001836:	2242      	movs	r2, #66	@ 0x42
+ 8001836:	2263      	movs	r2, #99	@ 0x63
  8001838:	60da      	str	r2, [r3, #12]
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
  800183a:	4b18      	ldr	r3, [pc, #96]	@ (800189c <MX_TIM1_Init+0x98>)

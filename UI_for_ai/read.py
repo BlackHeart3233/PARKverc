@@ -23,15 +23,15 @@ from Stranski_model.stranski_mode import obdelaj_sliko_model_2_1
 #video2_path =['UI_for_ai/Video_004_25_4_2025.mp4','UI_for_ai/Video_009_25_4_2025.mp4','UI_for_ai/Video_005_25_4_2025.mp4']
 
 video1_path = [
-    "UI_for_ai/Video_004_25_4_2025.mp4",
-    "UI_for_ai/Video_009_25_4_2025.mp4",
-    "UI_for_ai/Video_005_25_4_2025.mp4"
+    #"C:/github_repository/UI_for_ai/Video_004_25_4_2025.mp4",
+    "C:/github_repository/UI_for_ai/Video_009_25_4_2025.mp4",
+    "C:/github_repository/UI_for_ai/Video_005_25_4_2025.mp4"
 ]
 
 video2_path = [
-    "UI_for_ai/IMG_4905.mp4",
-    "UI_for_ai/IMG_4898.mp4",
-    "UI_for_ai/IMG_4902.mp4"
+    "C:/github_repository/UI_for_ai/IMG_4905.mp4",
+    #"C:/github_repository/UI_for_ai/IMG_4898.mp4",
+    #"C:/github_repository/UI_for_ai/IMG_4902.mp4"
 ]
 
 dropdown_options = ["Elektricno", "Druzinsko", "Invalidsko", "Navadno"]
@@ -39,9 +39,9 @@ selected_option = dropdown_options[0]
 dropdown_open = False
 
 
-background_path = r"UI_for_ai/background_l.jpg"
-arial_path = 'UI_for_ai/ARIAL.TTF'
-ding_sound_path = 'UI_for_ai/ding.mp3'
+background_path = r"C:/github_repository/UI_for_ai/background_l.jpg"
+arial_path = 'C:/github_repository/UI_for_ai/ARIAL.TTF'
+ding_sound_path = 'C:/github_repository/UI_for_ai/ding.mp3'
 
 PADDING_LEFT = 20
 PADDING_TOP_BOTTOM = 20
@@ -170,7 +170,7 @@ def najdi_offset_iz_oznaka(oznaka_podatki, width, height, top_point=None, bottom
     elif offset < -max_offset:
         offset = -max_offset
 
-    #print("OFFSET JE: ", offset)
+    print("OFFSET JE: ", offset)
     return offset
 
 def bezier_quad(p0, p1, p2, t): #to je za one krivulje ko se izrisujejo
