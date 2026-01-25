@@ -423,9 +423,9 @@ def rx_thread():
                 elif p.startswith("DIST:"):
                     dist = float(p.split(":")[1])
 
-            if rot is not None and dist is not None:
+            """if rot is not None and dist is not None:
                 print(f"  -> Rotary = {rot:.2f} deg | Distance = {dist:.2f} cm")
-
+"""
             with serial_lock:
                 if rot is not None:
                     latest_rot = rot
